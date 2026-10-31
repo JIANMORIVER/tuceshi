@@ -1,0 +1,14 @@
+import {readdir,readFile,mkdir,writeFile,lstat} from 'node:fs/promises';import {join,relative,resolve} from 'node:path';import {deflateRawSync} from 'node:zlib';import {createHash} from 'node:crypto';
+import {crc32} from '../server/image-card/png.mjs';
+const root=resolve('.'),files=[];
+async function add(path){const stat=await lstat(path);if(stat.isSymbolicLink())throw Error('Refuse symlink '+path);if(stat.isDirectory()){for(const name of (await readdir(path)).sort())await add(join(path,name));}else files.push(path);}
+for(const path of ['src','server','scripts','tests','docs','.github','package.json','package-lock.json','index.html','vite.config.ts','tsconfig.json','.gitignore','.env.example','README.md','AGENTS.md'])await add(path);
+const locals=[],centrals=[],manifest=[];let offset=0;
+for(const path of files){const name=relative(root,resolve(path)).replaceAll('\\','/');if(name.startsWith('../')||name.includes('/.local/')||name.includes('node_modules')||name.startsWith('.env')&&name!=='.env.example')throw Error('Disallowed file '+name);
+ const bytes=await readFile(path),text=bytes.toString('utf8');if(/\b(?:sk-[A-Za-z0-9]{24,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})\b/.test(text))throw Error('Possible credential in '+name);
+ const filename=Buffer.from('life-map-image-workbench/'+name),compressed=deflateRawSync(bytes),crc=crc32(bytes),local=Buffer.alloc(30);local.writeUInt32LE(0x04034b50);local.writeUInt16LE(20,4);local.writeUInt16LE(0x800,6);local.writeUInt16LE(8,8);local.writeUInt32LE(crc,14);local.writeUInt32LE(compressed.length,18);local.writeUInt32LE(bytes.length,22);local.writeUInt16LE(filename.length,26);
+ const central=Buffer.alloc(46);central.writeUInt32LE(0x02014b50);central.writeUInt16LE(20,4);central.writeUInt16LE(20,6);central.writeUInt16LE(0x800,8);central.writeUInt16LE(8,10);central.writeUInt32LE(crc,16);central.writeUInt32LE(compressed.length,20);central.writeUInt32LE(bytes.length,24);central.writeUInt16LE(filename.length,28);central.writeUInt32LE(offset,42);
+ locals.push(local,filename,compressed);centrals.push(central,filename);offset+=local.length+filename.length+compressed.length;manifest.push({path:name,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});
+}
+const directory=Buffer.concat(centrals),end=Buffer.alloc(22);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(files.length,8);end.writeUInt16LE(files.length,10);end.writeUInt32LE(directory.length,12);end.writeUInt32LE(offset,16);const zip=Buffer.concat([...locals,directory,end]);
+await mkdir('artifacts',{recursive:true});await writeFile('artifacts/life-map-image-workbench-source.zip',zip);await writeFile('artifacts/source-manifest.json',JSON.stringify({files:manifest,zipSha256:createHash('sha256').update(zip).digest('hex')},null,2));console.log(JSON.stringify({files:files.length,bytes:zip.length,output:'artifacts/life-map-image-workbench-source.zip'}));

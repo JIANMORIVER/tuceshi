@@ -1,0 +1,188 @@
+{
+  "source": "life-map-antigravity, current v10 source snapshot, 2026-10-31",
+  "sourceCloudCommit": "8ed8f61cdf5a138a14b63c479ab99268766e4d94",
+  "files": [
+    {
+      "path": "server/ai/http.mjs",
+      "sha256": "051fb47d227a984d06ae4bacddab5b9bb8c6347edd2448d3cbe431ed25ed2eb4"
+    },
+    {
+      "path": "server/ai/models.mjs",
+      "sha256": "89a94f5849d689ee4e90583ed10bbc373c6ca9d07f4e503840d22090156c2730"
+    },
+    {
+      "path": "server/image-card/config.mjs",
+      "sha256": "4ff495c37c1772508e43ce6581abd0ec008d63d819287a0e90a7e6dd2ec1306e"
+    },
+    {
+      "path": "server/ai/complete-terrain.mjs",
+      "sha256": "e52100163b82644f1848d05f735c3a790a197f2249cab07dbdadf4a71ac1dfa6"
+    },
+    {
+      "path": "server/image-card/service.mjs",
+      "sha256": "325dba531ae22a6d43d02b3e2e5a5e210d608c281b210070a35e36c6872b77f3"
+    },
+    {
+      "path": "server/image-card/prompt.mjs",
+      "sha256": "1397674766cab6c46674407f24bf64ae04ca540e1c2459ea2ee01cd64ea864e9"
+    },
+    {
+      "path": "server/image-card/dashscope.mjs",
+      "sha256": "ad3cc718fbec1114d8033181fbb7318afa67827cdb20dd4f3a63890330b3c188"
+    },
+    {
+      "path": "server/image-card/png.mjs",
+      "sha256": "7ec187beae4757afc67b879f66aad72e3be5864f242f89b50e5917b5854e1409"
+    },
+    {
+      "path": "server/ai/terrain.mjs",
+      "sha256": "668c7dcd5cffede473d655bda3a71dc1e3bfb12598956e21ccb14789d2565631"
+    },
+    {
+      "path": "server/ai/diary-dialogue.mjs",
+      "sha256": "7c7eaae92135559e66ff4506cefad9b71f2f551a30c72466883ede8ab2868751"
+    },
+    {
+      "path": "server/ai/diary-prompt.mjs",
+      "sha256": "bc1d77981f260b9b6d2d41f633dac64b402233dc4984789af5d7b40cc9f79b86"
+    },
+    {
+      "path": "server/ai/scene-exploration.mjs",
+      "sha256": "88d4a5cd97a21249f0f08888d1cab8725fe04cf431ec6e9ed5eddd1d890cbdce"
+    },
+    {
+      "path": "dist/domain/services/life-interpretation-service.js",
+      "sha256": "fafaa08a65dd667e6845a6a8990be73ea557768dd93b11eb5f2d7aa4b3915cd7"
+    },
+    {
+      "path": "dist/domain/contracts/scene-intent.js",
+      "sha256": "df37b5f5918ea695717a3985567c463c30e116bbf2672dce93d5b0dd7f7961f0"
+    },
+    {
+      "path": "server/background-removal/http.mjs",
+      "sha256": "af3516ca7918af25e7ddb2d07887753bb20b963a4f07b1fd158bd4fcceaf3ace"
+    },
+    {
+      "path": "server/background-removal/pipeline.mjs",
+      "sha256": "1c437b839bb7ad38b52d2d6c0530446929cb5a0afaff74a0f439b43b31c47eca"
+    },
+    {
+      "path": "server/background-removal/offline.mjs",
+      "sha256": "b8847ac4145c0591e972f54ca3a8ba2e0fdecd7d0dc7512c28b2e4d44cb267b6"
+    },
+    {
+      "path": "server/background-removal/routed-pipeline.mjs",
+      "sha256": "488e5ddc9dfdf7bc0406b3b9d3e6d5e6946ff0bbd14cde4d48a71388896663b9"
+    },
+    {
+      "path": "server/background-removal/alpha.mjs",
+      "sha256": "01613f4dc917c3e00f91a9f5d5a2a3ee274a8873c1deeeaac027c8bc0331248b"
+    },
+    {
+      "path": "server/background-removal/replicate.mjs",
+      "sha256": "89f7121af6c15c9ef5d874e966ca9a0a5ba74fd11da0b0271383cdbb3e707ff8"
+    },
+    {
+      "path": "src/world/components/AiModelSettings.tsx",
+      "sha256": "91fb330fd593958d173b6c67c97b85f3c77eb0e4d749b3357b1cd51aaed019bc"
+    },
+    {
+      "path": "src/services/model-settings-client.ts",
+      "sha256": "acf713dd43a7824c4a082445dec8d86bfea1091a635fba1cb5a1c55db4a7947f"
+    },
+    {
+      "path": "src/services/life-interpretation-service.ts",
+      "sha256": "a66871576270b7217cedceeee3a2381af8c3cf07f792fcd72c3608133797761f"
+    },
+    {
+      "path": "src/contracts/scene-intent.ts",
+      "sha256": "28a9f45506e3b79f642e7339aab47da3d905c8a1964b079c304a0d268d8310ec"
+    },
+    {
+      "path": "src/domain/models.ts",
+      "sha256": "4156e8c2c8d7586668e9da1d2faafc4af1ef0041c2ffc4aeed27a0d79aa3fa20"
+    },
+    {
+      "path": "src/world/domain/annotation.ts",
+      "sha256": "e85214690034d7334aadd1bcebdbdd2aaa5f50eb42823be9f8a7175e20db8f55"
+    },
+    {
+      "path": "src/world/domain/lifeInput.ts",
+      "sha256": "f065e8dda81d9f0dc7687185112d18b38afb4fe7b8dbc9ff591e9a1d1355c9b0"
+    },
+    {
+      "path": "src/world/schemas/tileSpec.ts",
+      "sha256": "e71a24f5f2d06e54d9e68b3817e3f2eceba276dd2661fc540ade0c82bba9751b"
+    },
+    {
+      "path": "src/services/diary-focus.ts",
+      "sha256": "83dbc3ee96b50b53e2d1de81bb442e31c3031b458cbcbb9d53272d4ee98642af"
+    },
+    {
+      "path": "src/services/event-aggregation.ts",
+      "sha256": "a482f006ecb7192e9d65483602f48dfb40b5d40c5dff37a42be22894770a27b7"
+    },
+    {
+      "path": "src/contracts/dual-stage-contract.ts",
+      "sha256": "88e226492461862e0542fb91582c15b719ea3aa0056b6376c7fd81a5acdcdc32"
+    },
+    {
+      "path": "src/services/diary-dialogue-client.ts",
+      "sha256": "2db344b59a9dc9de5dd3b20c3f9b96ff324fece78bb00ffbcbf5dd5d01ea8c6e"
+    },
+    {
+      "path": "src/world/domain/terrainReview.ts",
+      "sha256": "84ce1c9d84e5c70008fe8fcc17ef7e6baf5afe3f688a3cd0f41379a078caad17"
+    },
+    {
+      "path": "src/contracts/image-generation-contract.ts",
+      "sha256": "7634822a7b4f72b7e0b53af5bbb7ad647111b1d9c9a02ad841f470aed949f75e"
+    },
+    {
+      "path": "src/world/ui/pixel/pixel-tokens.css",
+      "sha256": "eb5ea929a6478078a3516ce89aad9c1144b6cab66c62bd0163a3d60c8be6d20a"
+    },
+    {
+      "path": "tests/diary-dialogue.test.mjs",
+      "sha256": "20e80b165ee06ab8c1bd6d13ad964a2bed2a07aeb308474c8fabae4a6c84a225"
+    },
+    {
+      "path": "dist/domain/services/diary-dialogue-client.js",
+      "sha256": "399cb584ddf95017a0ce8cac1ad004f30574effb92304c3464c937769f05dcb7"
+    },
+    {
+      "path": "dist/domain/services/model-settings-client.js",
+      "sha256": "c4bbbe40c9beac38a9b5d545999f18a0f1722f37e44cb4616af0eaca0e219180"
+    },
+    {
+      "path": "tests/dual-generation.test.mjs",
+      "sha256": "8e16255574dc69281235d440a66f450c6ab115b1ab15274853acd7efc1c3b212"
+    },
+    {
+      "path": "tests/terrain-ground-rules.test.mjs",
+      "sha256": "43987479d48a2119786eb2a76c0d53cbcc4066660ef23fcb6c623b373ada3675"
+    }
+  ],
+  "externalImports": [
+    "node:assert/strict",
+    "node:child_process",
+    "node:crypto",
+    "node:fs",
+    "node:fs/promises",
+    "node:os",
+    "node:path",
+    "node:test",
+    "node:url",
+    "node:util",
+    "node:zlib",
+    "react"
+  ],
+  "excluded": [
+    ".env files",
+    "user diaries",
+    "generated images",
+    "node_modules",
+    "formal map and profile UI",
+    "cloud identity and runtime secrets"
+  ]
+}

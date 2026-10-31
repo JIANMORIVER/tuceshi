@@ -1,0 +1,525 @@
+/**
+ * Life Map — Pixelium Design 像素设计体系全局样式变量与基础规则
+ * 遵循复古 2D 像素游戏质感：阶梯像素边框、实心像素阴影、实体物理下陷动效。
+ */
+
+:root {
+  /* 基础尺寸单位 (2px 像素栅格) */
+  --px-unit: 2px;
+
+  /* 配色系统 (提取自 4 屏参考图) */
+  --px-bg-page: #eaf3ec;
+  --px-bg-card: #fbfdfa;
+  --px-bg-card-soft: #f2f7f3;
+  --px-bg-accent-yellow: #fff8e7;
+
+  /* 边框与阴影色 (温润墨绿，替代生硬纯黑) */
+  --px-border-dark: #1b3824;
+  --px-border-medium: #70947c;
+  --px-border-light: #b4ccbc;
+  --px-shadow-dark: #122619;
+
+  /* 主题交互色 */
+  --px-primary: #2d6b3f;
+  --px-primary-hover: #367d4b;
+  --px-primary-active: #214f2f;
+  --px-primary-shadow: #163820;
+
+  --px-accent-orange: #ea7a24;
+  --px-accent-orange-shadow: #8f4510;
+  --px-accent-yellow: #f5b027;
+
+  /* 文字颜色 */
+  --px-text-main: #142e1d;
+  --px-text-sub: #385943;
+  --px-text-muted: #648670;
+  --px-text-inverse: #ffffff;
+
+  /* 像素字体与渲染 */
+  --px-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+
+/* ------------------------------------------------------------- */
+/* 核心：阶梯像素切角与边框 (Stepped Pixel Border)              */
+/* ------------------------------------------------------------- */
+
+/* 标准 2px 阶梯边框与 3px 实心阴影容器 */
+.pixel-box {
+  position: relative;
+  background-color: var(--px-bg-card);
+  color: var(--px-text-main);
+  box-sizing: border-box;
+  /* 使用 2px 阶梯 box-shadow 绘制硬朗像素切角与墨绿描边 */
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    /* 四个外阶梯角 */
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark),
+    /* 底部 3px 像素阴影 */
+    0 3px 0 0 var(--px-shadow-dark),
+    -2px 3px 0 0 var(--px-shadow-dark),
+    2px 3px 0 0 var(--px-shadow-dark);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+/* 浅色平坦像素框 (无重阴影，常用于输入框或内嵌卡片) */
+.pixel-box-flat {
+  position: relative;
+  background-color: var(--px-bg-card);
+  box-sizing: border-box;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark);
+}
+
+/* 按压下沉效果 (Pixel Press Sinking Feedback) */
+.pixel-pressable {
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pixel-pressable:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark),
+    0 4px 0 0 var(--px-shadow-dark),
+    -2px 4px 0 0 var(--px-shadow-dark),
+    2px 4px 0 0 var(--px-shadow-dark);
+}
+
+.pixel-pressable:active {
+  transform: translateY(2px) !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark),
+    0 1px 0 0 var(--px-shadow-dark) !important;
+}
+
+/* 选中的主要森林绿背景 */
+.pixel-box-primary {
+  background-color: var(--px-primary) !important;
+  color: var(--px-text-inverse) !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark),
+    0 3px 0 0 var(--px-primary-shadow),
+    -2px 3px 0 0 var(--px-primary-shadow),
+    2px 3px 0 0 var(--px-primary-shadow) !important;
+}
+
+/* ------------------------------------------------------------- */
+/* 像素图标与微标组件工具类                                      */
+/* ------------------------------------------------------------- */
+
+/* 像素微标 (Badge / Tag) */
+.pixel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  background-color: var(--px-bg-card);
+  color: var(--px-text-main);
+  box-shadow:
+    0 -1px 0 0 var(--px-border-dark),
+    0 1px 0 0 var(--px-border-dark),
+    -1px 0 0 0 var(--px-border-dark),
+    1px 0 0 0 var(--px-border-dark);
+}
+
+.pixel-badge-orange {
+  background-color: var(--px-accent-orange);
+  color: #ffffff;
+  box-shadow:
+    0 -1px 0 0 #6e2f08,
+    0 1px 0 0 #6e2f08,
+    -1px 0 0 0 #6e2f08,
+    1px 0 0 0 #6e2f08,
+    0 2px 0 0 var(--px-accent-orange-shadow);
+}
+
+.pixel-badge-green {
+  background-color: var(--px-primary);
+  color: #ffffff;
+  box-shadow:
+    0 -1px 0 0 var(--px-border-dark),
+    0 1px 0 0 var(--px-border-dark),
+    -1px 0 0 0 var(--px-border-dark),
+    1px 0 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-primary-shadow);
+}
+
+/* 像素勾选小徽章 (Pixel Check Badge) */
+.pixel-check-badge {
+  width: 22px;
+  height: 22px;
+  background-color: var(--px-primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark);
+}
+
+/* ------------------------------------------------------------- */
+/* 对话向导气泡 (Speech Bubble)                                  */
+/* ------------------------------------------------------------- */
+.pixel-speech-balloon {
+  position: relative;
+  background: #ffffff;
+  padding: 12px 14px;
+  color: var(--px-text-main);
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark),
+    0 3px 0 0 var(--px-shadow-dark);
+}
+
+/* 左侧像素小指针 */
+.pixel-speech-balloon::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: -8px;
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  box-shadow:
+    -2px 0 0 0 var(--px-border-dark),
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark);
+}
+
+/* ------------------------------------------------------------- */
+/* 轻量呼吸与浮动动效                                            */
+/* ------------------------------------------------------------- */
+@keyframes pixel-float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
+  100% { transform: translateY(0px); }
+}
+
+.pixel-anim-float {
+  animation: pixel-float 3s ease-in-out infinite;
+}
+
+
+/* ------------------------------------------------------------- */
+/* 移动端整站底部导航栏 Pixelium 风格重塑                       */
+/* ------------------------------------------------------------- */
+.bottom-nav {
+  position: absolute !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  bottom: 14px !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 6px !important;
+  padding: 6px 8px !important;
+  background-color: var(--px-bg-card) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark),
+    0 4px 0 0 var(--px-shadow-dark) !important;
+  z-index: 60 !important;
+}
+
+.bottom-nav button {
+  min-height: 48px !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--px-text-sub) !important;
+  font-weight: 700 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  cursor: pointer !important;
+  transition: transform 0.08s ease !important;
+}
+
+.bottom-nav button:active {
+  transform: translateY(2px) !important;
+}
+
+.bottom-nav button.active {
+  background-color: var(--px-primary) !important;
+  color: #ffffff !important;
+  box-shadow:
+    0 -1px 0 0 var(--px-border-dark),
+    0 1px 0 0 var(--px-border-dark),
+    -1px 0 0 0 var(--px-border-dark),
+    1px 0 0 0 var(--px-border-dark) !important;
+}
+
+
+/* ============================================================= */
+/* 全站界面像素风全面重绘 (Universal Pixel Reskin Layer)         */
+/* ============================================================= */
+
+/* 1. 全局容器与移动端外壳去现代圆角、改用像素边框与草地底色 */
+.app {
+  border-radius: 0 !important;
+  background: var(--px-bg-page) !important;
+  box-shadow:
+    0 -3px 0 0 var(--px-border-dark),
+    0 3px 0 0 var(--px-border-dark),
+    -3px 0 0 0 var(--px-border-dark),
+    3px 0 0 0 var(--px-border-dark),
+    -3px -3px 0 0 var(--px-border-dark),
+    3px -3px 0 0 var(--px-border-dark),
+    -3px 3px 0 0 var(--px-border-dark),
+    3px 3px 0 0 var(--px-border-dark),
+    0 6px 0 0 var(--px-shadow-dark) !important;
+}
+
+/* 2. 所有通用卡片重绘为阶梯墨绿像素切角卡片 */
+.glass,
+.glass-soft,
+.soft-card,
+.flow-panel,
+.record-card,
+.review-card,
+.story-card,
+.calendar-card,
+.profile-intro,
+.achievement-section,
+.achievement-card,
+.message-overview,
+.inbox-card,
+.account-card,
+.metro-card,
+.empty-shell,
+.form-card,
+.dev-panel,
+.ai-service-panel,
+.detail-modal {
+  border-radius: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: var(--px-bg-card) !important;
+  border: none !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark),
+    0 3px 0 0 var(--px-shadow-dark) !important;
+}
+
+/* 3. 所有按钮重塑为像素下沉按钮 */
+.main-button,
+.candidate-select-button {
+  border-radius: 0 !important;
+  background: var(--px-primary) !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-family: var(--px-font-family) !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark),
+    0 3px 0 0 var(--px-primary-shadow) !important;
+  cursor: pointer !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease !important;
+}
+
+.main-button:active,
+.candidate-select-button:active {
+  transform: translateY(2px) !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    0 1px 0 0 var(--px-primary-shadow) !important;
+}
+
+.small-button,
+.pill-button,
+.text-toggle,
+.annotation-toggle,
+.round-button,
+.modal-close,
+.pause-button,
+.reset-button {
+  border-radius: 0 !important;
+  background: var(--px-bg-card) !important;
+  color: var(--px-text-main) !important;
+  border: none !important;
+  font-family: var(--px-font-family) !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-shadow-dark) !important;
+  cursor: pointer !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease !important;
+}
+
+.small-button:active,
+.pill-button:active,
+.text-toggle:active,
+.annotation-toggle:active,
+.round-button:active,
+.modal-close:active {
+  transform: translateY(2px) !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark) !important;
+}
+
+/* 4. 全局输入域与文本域 */
+input[type="text"],
+input[type="password"],
+textarea,
+select {
+  border-radius: 0 !important;
+  background: #ffffff !important;
+  border: none !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    -2px -2px 0 0 var(--px-border-dark),
+    2px -2px 0 0 var(--px-border-dark),
+    -2px 2px 0 0 var(--px-border-dark),
+    2px 2px 0 0 var(--px-border-dark) !important;
+  color: var(--px-text-main) !important;
+}
+
+/* 5. 全局标签与角标 */
+.activity-tag,
+.emotion-tag,
+.legend span,
+.pixel-detail-tag {
+  border-radius: 0 !important;
+  font-weight: 700 !important;
+  box-shadow:
+    0 -1px 0 0 var(--px-border-dark),
+    0 1px 0 0 var(--px-border-dark),
+    -1px 0 0 0 var(--px-border-dark),
+    1px 0 0 0 var(--px-border-dark) !important;
+}
+
+/* 6. 录音按钮与勋章图标重绘 */
+.voice-button {
+  border-radius: 0 !important;
+  background: var(--px-primary) !important;
+  box-shadow:
+    0 -3px 0 0 var(--px-border-dark),
+    0 3px 0 0 var(--px-border-dark),
+    -3px 0 0 0 var(--px-border-dark),
+    3px 0 0 0 var(--px-border-dark),
+    0 6px 0 0 var(--px-shadow-dark) !important;
+}
+
+.voice-inner {
+  border-radius: 0 !important;
+  background: #ffffff !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark) !important;
+}
+
+.story-icon,
+.small-icon,
+.medal {
+  border-radius: 0 !important;
+  background: #eaf3ec !important;
+  box-shadow:
+    0 -1px 0 0 var(--px-border-dark),
+    0 1px 0 0 var(--px-border-dark),
+    -1px 0 0 0 var(--px-border-dark),
+    1px 0 0 0 var(--px-border-dark) !important;
+}
+
+/* 7. Toast 提示 */
+.toast {
+  border-radius: 0 !important;
+  background: var(--px-bg-card) !important;
+  color: var(--px-text-main) !important;
+  border: none !important;
+  box-shadow:
+    0 -2px 0 0 var(--px-border-dark),
+    0 2px 0 0 var(--px-border-dark),
+    -2px 0 0 0 var(--px-border-dark),
+    2px 0 0 0 var(--px-border-dark),
+    0 3px 0 0 var(--px-shadow-dark) !important;
+}
