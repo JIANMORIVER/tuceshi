@@ -6,7 +6,8 @@ import { ImageCardError } from "../image-card/config.mjs";
 import { DIARY_IMAGE_UNDERSTANDING_PROMPT } from "./diary-prompt.mjs";
 import { SceneExploration, SceneRequestError } from "./scene-exploration.mjs";
 const json = (res,data,status=200) => { res.writeHead(status,{"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"});res.end(JSON.stringify(data)); };
-export function createAiHandler({settings=new ModelSettings(),terrain=new CompleteTerrainGeneration(settings),interpreter,dialogue=new DiaryDialogue(settings)}={}) {
+export function createAiHandler({cookieName="life_map_ai",settings=new ModelSettings(),terrain=new CompleteTerrainGeneration(settings),interpreter,dialogue=new DiaryDialogue(settings)}={}) {
+  if(!/^[a-zA-Z0-9_]+$/.test(cookieName))throw new Error("Invalid session cookie name");
   const scene = new SceneExploration(settings);
   const session=randomBytes(32).toString("hex");
   return async(req,res) => {
@@ -16,7 +17,7 @@ export function createAiHandler({settings=new ModelSettings(),terrain=new Comple
       const host=req.headers.host||"",origin=req.headers.origin;
       if (!/^(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/.test(host)||origin&&origin!==`http://${host}`) throw new ImageCardError("ORIGIN_DENIED","请从本机应用页面访问模型设置。",403);
       if (req.method==="GET"&&path==="/api/model-settings") {
-        res.setHeader("set-cookie",`life_map_ai=${session}; HttpOnly; SameSite=Strict; Path=/api`);
+        res.setHeader("set-cookie",`${cookieName}=${session}; HttpOnly; SameSite=Strict; Path=/api`);
         json(res,{...settings.info(),pipeline:COMPLETE_SCENE_PROMPT_VERSION,capabilities:{optionalInquiry:true,completeScenePlanning:true}});return true;
       }
       if(req.method==="GET"&&path.startsWith("/api/terrain-images/")) {
@@ -24,7 +25,7 @@ export function createAiHandler({settings=new ModelSettings(),terrain=new Comple
         res.writeHead(200,{"content-type":"image/png","cache-control":"no-store","x-content-type-options":"nosniff","cross-origin-resource-policy":"same-origin"});res.end(bytes);return true;
       }
       if(req.method==="GET"&&path==="/api/scene/capabilities") { json(res,{vision:!!settings.visionConfig().apiKey,visionModel:settings.visionModel,chat:settings.textConfig().provider==='mock'||!!settings.textConfig().apiKey}); return true; }
-      const cookie=/(?:^|;\s*)life_map_ai=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie||"")?.[1];
+      const cookie=new RegExp(`(?:^|;\\s*)${cookieName}=([a-f0-9]{64})(?:;|$)`).exec(req.headers.cookie||"")?.[1];
       if(!cookie||!timingSafeEqual(Buffer.from(cookie),Buffer.from(session))) throw new ImageCardError("SESSION_REQUIRED","请刷新页面后继续，已有生成不会自动重提。",403);
       if(req.method!=="POST") throw new ImageCardError("METHOD_NOT_ALLOWED","请求方法不支持。",405);
       let body="";for await(const part of req){body+=part;if(body.length>(path==="/api/scene/recognize"?6*1024*1024:128*1024))throw new ImageCardError("INPUT_TOO_LARGE","输入过长。",413);}

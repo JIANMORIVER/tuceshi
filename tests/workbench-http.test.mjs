@@ -5,7 +5,8 @@ test('standalone HTTP server keeps settings secret, requires session, blocks for
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base=`http://127.0.0.1:${server.address().port}`;
  try{
   const noSession=await fetch(base+'/api/diary/interpret',{method:'POST',body:JSON.stringify({input:'今天读书'})});assert.equal(noSession.status,403);
-  const info=await fetch(base+'/api/model-settings'),cookie=info.headers.get('set-cookie').split(';')[0],publicInfo=await info.text();assert.ok(!publicInfo.includes('fixture-hidden-key'));assert.equal(JSON.parse(publicInfo).textProvider,'mock');
+  const info=await fetch(base+'/api/model-settings'),cookie=info.headers.get('set-cookie').split(';')[0],publicInfo=await info.text();assert.ok(!publicInfo.includes('fixture-hidden-key'));assert.equal(JSON.parse(publicInfo).textProvider,'mock');assert.ok(cookie.startsWith('life_map_workbench_ai='));
+  const oldCookie=await fetch(base+'/api/diary/interpret',{method:'POST',headers:{cookie:cookie.replace('life_map_workbench_ai=','life_map_ai=')},body:JSON.stringify({input:'今天读书'})});assert.equal(oldCookie.status,403);
   const post=(path,body)=>fetch(base+path,{method:'POST',headers:{cookie,'content-type':'application/json'},body:JSON.stringify(body)});
   assert.equal((await fetch(base+'/api/model-settings',{headers:{origin:'https://evil.example'}})).status,403);
   assert.equal((await fetch(base+'/api/scene/chat')).status,404);

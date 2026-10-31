@@ -184,5 +184,12 @@
     "node_modules",
     "formal map and profile UI",
     "cloud identity and runtime secrets"
+  ],
+  "adaptations": [
+    {
+      "path": "server/ai/http.mjs",
+      "change": "Added injectable validated cookieName; standalone server uses life_map_workbench_ai to avoid cookie collision with localhost main application. Upstream default preserved.",
+      "extractedSha256": "c311f44ebb72fa77b927e1327126f3d6b2de6a95b07dba491b91b6e8d0522759"
+    }
   ]
 }

@@ -28,3 +28,5 @@
 GitHub是源码交付位置，不是新的公网生图服务；GitHub Pages不能运行Node API。导入其他开发器后按README启动，Key需在新工作台单独填写。真实地块效果、跨图风格及防翘边规则仍需日后主动付费生成验证。
 
 当前实验保存在独立浏览器命名空间，图片保存在本独立目录`.local/terrain-candidates`。下载图片／JSON由用户主动触发。发布的源码不包含`.local`、`.env.local`、node_modules、旧日记或生成历史。
+
+独立会话Cookie使用 `life_map_workbench_ai`，与主应用本机的 `life_map_ai` 分开；测试也验证原Cookie不能代替工作台会话。原HTTP工厂只增加可注入Cookie名称，默认行为保留，适配记录见来源清单。

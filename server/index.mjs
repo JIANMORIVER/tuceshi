@@ -16,7 +16,7 @@ export async function createWorkbenchServer(options={}){
  const settings=options.settings||new ModelSettings({...environment,LIFE_MAP_TEXT_PROVIDER:environment.LIFE_MAP_TEXT_PROVIDER||'mock',LIFE_MAP_GENERATION_ROUTE:environment.LIFE_MAP_GENERATION_ROUTE||'native-alpha'});
  const storageRoot=options.storageRoot||resolve(root,'.local/terrain-candidates');
  const interpreter=options.interpreter||(await import('../dist/domain/services/life-interpretation-service.js')).interpretLifeEntry;
- const ai=createAiHandler({settings,interpreter,terrain:options.terrain||new CompleteTerrainGeneration(settings,{storageRoot})});
+ const ai=createAiHandler({cookieName:"life_map_workbench_ai",settings,interpreter,terrain:options.terrain||new CompleteTerrainGeneration(settings,{storageRoot})});
  const staticRoot=resolve(root,'dist');
  const listener=withTerrainBackground(async(req,res)=>{
   if(await ai(req,res))return;

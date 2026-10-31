@@ -92,3 +92,5 @@ npm run package
 源码ZIP输出在 `artifacts/life-map-image-workbench-source.zip`，只含源码、锁文件、测试与文档，排除密钥、node_modules、构建产物和实验数据。将它或GitHub源码直接导入其他开发器后执行启动命令即可。浏览器视觉证据与测试摘要位于本机 `.local/`，不发布测试图片到正式数据。
 
 来源：日记岛当前v10源码快照（主应用云端源码标识 `8ed8f61cdf5a138a14b63c479ab99268766e4d94`）；独立工作台容器与控制器是本次抽取适配。原项目、原服务和用户历史数据保留。
+
+独立会话Cookie使用 `life_map_workbench_ai`，与主应用本机的 `life_map_ai` 分开；测试也验证原Cookie不能代替工作台会话。原HTTP工厂只增加可注入Cookie名称，默认行为保留，适配记录见来源清单。
