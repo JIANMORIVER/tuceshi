@@ -1,4 +1,5 @@
 import { ArchiveService } from './service.mjs';
+import { parseStyleZipBuffer, createStyleZipBuffer } from './style-pack.mjs';
 
 const json = (res, data, status = 200) => {
   res.writeHead(status, {
@@ -14,9 +15,34 @@ export function createArchiveHandler({ archive = new ArchiveService() } = {}) {
     const urlObj = new URL(req.url, 'http://localhost');
     const path = urlObj.pathname;
 
-    if (!path.startsWith('/api/archive/')) return false;
+    if (!path.startsWith('/api/archive/') && !path.startsWith('/api/style/')) return false;
 
     try {
+      // 风格包 ZIP 批量导入 POST /api/style/import-zip
+      if (req.method === 'POST' && path === '/api/style/import-zip') {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const buffer = Buffer.concat(chunks);
+        const result = parseStyleZipBuffer(buffer);
+        json(res, { success: true, ...result, count: result.styles.length });
+        return true;
+      }
+
+      // 风格包 ZIP 批量导出 POST /api/style/export-zip
+      if (req.method === 'POST' && path === '/api/style/export-zip') {
+        let body = '';
+        for await (const chunk of req) body += chunk;
+        const data = body ? JSON.parse(body) : {};
+        const zipBuffer = createStyleZipBuffer(data.styles || []);
+        res.writeHead(200, {
+          'content-type': 'application/zip',
+          'content-disposition': 'attachment; filename="life-map-styles-backup.zip"',
+          'cache-control': 'no-store'
+        });
+        res.end(zipBuffer);
+        return true;
+      }
+
       // 1. 读取资产图片 GET /api/archive/assets/:id
       if (req.method === 'GET' && path.startsWith('/api/archive/assets/')) {
         const assetId = path.slice('/api/archive/assets/'.length);

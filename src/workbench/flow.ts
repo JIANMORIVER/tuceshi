@@ -11,10 +11,16 @@ import {
   PRESET_STYLE_PACKAGES,
   DEFAULT_I2I_RULES,
   type StylePackage,
+  type StyleReferenceImage,
+  type StyleMode,
   type ReferenceImage,
   type ImageToImageRules,
   type ReferenceImageRole
 } from '../domain/experiment-rules.js';
+import {
+  loadAllCustomStyles,
+  loadPresetOverrides
+} from '../domain/style-storage.js';
 import {
   exportDiaryInputSnapshot,
   validateAndParseDiarySnapshot
@@ -416,14 +422,59 @@ export class Workbench {
   this.patchCandidate(id,{status:'submitting',error:undefined});this.submitting.add(candidate.submissionId);
   try{
    const lab=this.state.lab||freshExperiment().lab;
-   const activeStyle=PRESET_STYLE_PACKAGES.find(s=>s.style_id===lab.selectedStyleId);
-   const lab_config={
-    mode:lab.mode,
-    style:lab.customStyleText?.trim()||activeStyle?.style_text_rules,
-    negativeRules:lab.customNegativeText?.trim()||activeStyle?.style_negative_rules,
-    reference_images:lab.referenceImages,
-    i2i_rules:lab.i2iRules,
-    selected_style_id:lab.selectedStyleId
+
+   // 1. 获取完整风格包列表（合并预设与 IndexedDB 持久化存储）
+   const customList = await loadAllCustomStyles().catch(() => []);
+   const presetOverrides: Record<string, { images: StyleReferenceImage[]; mode?: StyleMode }> = await loadPresetOverrides().catch(() => ({}));
+   const allStyles: StylePackage[] = [
+     ...PRESET_STYLE_PACKAGES.map(p => {
+       const override = presetOverrides[p.style_id];
+       return {
+         ...p,
+         style_mode: override?.mode || p.style_mode || 'text_and_image',
+         style_reference_images: override?.images || p.style_reference_images || []
+       };
+     }),
+     ...customList
+   ];
+   const activeStyle = allStyles.find(s => s.style_id === lab.selectedStyleId) || allStyles[0];
+
+   // 2. 严格隔离：提取当前风格启用的参考图，绝不混杂其他风格
+   const isStyleImageMode = (activeStyle.style_mode || 'text_and_image') === 'text_and_image';
+   const activeStyleImages: ReferenceImage[] = (isStyleImageMode && Array.isArray(activeStyle.style_reference_images))
+     ? activeStyle.style_reference_images
+         .filter(img => img.enabled)
+         .map((img, i) => ({
+           id: img.id,
+           name: img.name,
+           dataUrl: img.dataUrl,
+           role: 'style' as const,
+           order: typeof img.order === 'number' ? img.order : i,
+           sizeBytes: img.sizeBytes
+         }))
+     : [];
+
+   // 3. 提取图生图实验场已有参考图，过滤掉旧的 style 图片避免残留
+   const baseLabImages = (Array.isArray(lab.referenceImages) ? lab.referenceImages : [])
+     .filter(img => img.role !== 'style');
+
+   // 4. 按角色顺序严格合并：Structure -> Scale -> Style -> Content
+   const mergedImages: ReferenceImage[] = [
+     ...baseLabImages.filter(img => img.role === 'structure'),
+     ...baseLabImages.filter(img => img.role === 'scale'),
+     ...activeStyleImages,
+     ...baseLabImages.filter(img => img.role === 'content')
+   ];
+
+   const isI2I = mergedImages.length > 0 || lab.mode === 'image_to_image';
+   const lab_config = {
+     mode: isI2I ? ('image_to_image' as const) : ('text_to_image' as const),
+     style: lab.customStyleText?.trim() || activeStyle?.style_text_rules,
+     negativeRules: lab.customNegativeText?.trim() || activeStyle?.style_negative_rules,
+     reference_images: mergedImages,
+     i2i_rules: lab.i2iRules,
+     selected_style_id: lab.selectedStyleId,
+     style_package: activeStyle
    };
    const result=await this.api.call<{job:GenerationJob}>('/api/terrain/generate',{
     candidate_id:candidate.id,

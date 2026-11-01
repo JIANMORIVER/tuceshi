@@ -208,3 +208,48 @@
 .audit-prompt-full{margin-top:6px}
 .audit-prompt-full summary{font-size:11px;color:#4a6b3f}
 .audit-prompt-full pre{max-height:200px;overflow-y:auto;background:#282c34;color:#abb2bf;padding:10px;border-radius:6px;font-size:11px;margin-top:6px;white-space:pre-wrap;word-break:break-all}
+
+/* 风格图文协同与参考图管理样式 */
+.style-img-pill{background:#efe7f5;color:#5c2d82;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
+.style-editor-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:8px}
+.style-editor-header h3{margin:0;font-size:15px;color:#2a3625}
+.style-mode-switcher{display:flex;gap:8px;background:#e8ece4;padding:4px;border-radius:10px}
+.mode-option{display:flex;align-items:center;gap:6px;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;color:#556150;transition:all .15s}
+.mode-option input{margin:0;cursor:pointer}
+.mode-option.active{background:#fff;color:#2c4b24;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+
+.style-images-manager{background:#fff;border:1px solid #e1e7dc;border-radius:12px;padding:14px;margin-bottom:12px}
+.style-images-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.style-images-header p{margin:4px 0 0;font-size:12px}
+.empty-style-images{background:#fafcf9;border:1px dashed #ced8c9;border-radius:10px;padding:24px;text-align:center;font-size:13px;color:#788573}
+
+.style-image-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.style-image-card{background:#fdfefc;border:1px solid #dbe3d6;border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;transition:all .15s}
+.style-image-card.disabled{opacity:0.6;filter:grayscale(60%);border-style:dashed}
+.style-img-preview-box{width:100%;height:130px;background:#f0f3ed;border-radius:6px;overflow:hidden;position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.style-img-preview-box img{max-width:100%;max-height:130px;object-fit:contain}
+.style-img-preview-box:hover .zoom-hint{opacity:1}
+.zoom-hint{position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,0.7);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;opacity:0;transition:opacity .15s}
+
+.style-img-info{font-size:12px}
+.style-img-title{font-weight:600;color:#2b3b27;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.order-badge{background:#e7efe3;color:#35532f;padding:1px 5px;border-radius:4px;font-size:11px}
+.style-img-meta{display:flex;justify-content:space-between;align-items:center;margin-top:4px;color:#707c6c;font-size:11px}
+.role-tag.style{background:#f2eaf7;color:#6b2e94;padding:1px 6px;border-radius:4px;font-weight:600}
+
+.style-img-controls{display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px solid #ecf0ea}
+.toggle-label{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#4a6344;cursor:pointer}
+.style-img-btn-actions{display:flex;gap:4px}
+.icon-btn{min-width:24px;min-height:24px;padding:2px 4px;font-size:11px;background:#f2f5ef;border:1px solid #d5dfd1;border-radius:6px;cursor:pointer}
+.icon-btn:hover:not(:disabled){background:#e3ebd9}
+.icon-btn:disabled{opacity:0.4;cursor:not-allowed}
+.icon-btn.delete:hover{color:#b3261e;border-color:#b3261e;background:#fee}
+
+.image-preview-modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
+.image-preview-modal-content{max-width:90vw;max-height:90vh;display:flex;flex-direction:column;padding:16px;background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.3)}
+.image-preview-modal-content .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.image-preview-modal-content .modal-img-container{max-width:85vw;max-height:75vh;overflow:auto;display:flex;align-items:center;justify-content:center}
+.image-preview-modal-content img{max-width:100%;max-height:75vh;object-fit:contain}
+.close-btn{background:none;border:none;font-size:20px;cursor:pointer;color:#666}
+.close-btn:hover{color:#000}
+

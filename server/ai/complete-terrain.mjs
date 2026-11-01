@@ -89,11 +89,13 @@ export function checkModuleDuplicates(content = '') {
 }
 
 export function buildCompleteScenePrompt(description, options={}) {
-  const style = options.style?.trim() || STYLE;
+  const stylePkg = options.stylePackage || options.style_package;
+  const style = options.style?.trim() || stylePkg?.style_text_rules?.trim() || stylePkg?.style_prompt?.trim() || STYLE;
   const refImages = Array.isArray(options.referenceImages) ? options.referenceImages : (Array.isArray(options.reference_images) ? options.reference_images : []);
   const i2iRules = options.i2iRules || options.i2i_rules;
   const structImgs = refImages.filter(img => img?.role === 'structure');
   const scaleImgs = refImages.filter(img => img?.role === 'scale');
+  const styleImgs = refImages.filter(img => img?.role === 'style');
   const roleGuide = buildI2IRoleGuidance(refImages);
 
   const i2iParts = [
@@ -156,10 +158,14 @@ export function buildCompleteScenePrompt(description, options={}) {
   module3.duplicate_check = checkModuleDuplicates(module3.content);
 
   // Module 4: 风格包
+  let styleRules = style;
+  if (styleImgs.length > 0) {
+    styleRules += '\n【风格图画法指导】：严格以风格参考图为绘画笔触、线条、色块、材质质感、配色方案与细节密度参考，仅学习其艺术画法与风格表达；严禁复制参考图内的具体建筑、主体造型、构图布局、文字、UI控件或拼图标记；最终画面场景内容严格由日记事实决定，不得覆盖地块结构与尺度约束。';
+  }
   const module4 = {
     id: 'style',
     name: '渲染风格与氛围',
-    content: `【画风与氛围规范】\n${style}`,
+    content: `【画风与氛围规范】\n${styleRules}`,
     char_count: 0,
     duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] }
   };
@@ -170,6 +176,7 @@ export function buildCompleteScenePrompt(description, options={}) {
   const rawNegatives = [
     NEGATIVE,
     options.negativeRules?.trim(),
+    stylePkg?.style_negative_rules?.trim(),
     refImages.length > 0 ? '复制参考图边框，复制参考图UI控件' : ''
   ].filter(Boolean);
   const dedupedNeg = Array.from(new Set(rawNegatives.join('，').split(/[,，]\s*/)))
@@ -213,11 +220,13 @@ export function buildCompleteScenePrompt(description, options={}) {
 
 export function buildNativeScenePrompt(description, options={}) {
   const visual=description.replace(/纯白外背景|纯白背景|外部纯白|白色背景/g,'透明外背景');
-  const style = options.style?.trim() || STYLE;
+  const stylePkg = options.stylePackage || options.style_package;
+  const style = options.style?.trim() || stylePkg?.style_text_rules?.trim() || stylePkg?.style_prompt?.trim() || STYLE;
   const refImages = Array.isArray(options.referenceImages) ? options.referenceImages : (Array.isArray(options.reference_images) ? options.reference_images : []);
   const i2iRules = options.i2iRules || options.i2i_rules;
   const structImgs = refImages.filter(img => img?.role === 'structure');
   const scaleImgs = refImages.filter(img => img?.role === 'scale');
+  const styleImgs = refImages.filter(img => img?.role === 'style');
   const roleGuide = buildI2IRoleGuidance(refImages);
 
   const i2iParts = [
@@ -279,10 +288,14 @@ export function buildNativeScenePrompt(description, options={}) {
   module3.duplicate_check = checkModuleDuplicates(module3.content);
 
   // Module 4: 风格包
+  let styleRules = style;
+  if (styleImgs.length > 0) {
+    styleRules += '\n【风格图画法指导】：严格以风格参考图为绘画笔触、线条、色块、材质质感、配色方案与细节密度参考，仅学习其艺术画法与风格表达；严禁复制参考图内的具体建筑、主体造型、构图布局、文字、UI控件或拼图标记；最终画面场景内容严格由日记事实决定，不得覆盖地块结构与尺度约束。';
+  }
   const module4 = {
     id: 'style',
     name: '渲染风格与氛围',
-    content: `【画风与氛围规范】\n${style}`,
+    content: `【画风与氛围规范】\n${styleRules}`,
     char_count: 0,
     duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] }
   };
@@ -293,6 +306,7 @@ export function buildNativeScenePrompt(description, options={}) {
   const rawNegatives = [
     NEGATIVE,
     options.negativeRules?.trim(),
+    stylePkg?.style_negative_rules?.trim(),
     refImages.length > 0 ? '复制参考图边框，复制参考图UI控件' : ''
   ].filter(Boolean);
   const dedupedNeg = Array.from(new Set(rawNegatives.join('，').split(/[,，]\s*/)))
