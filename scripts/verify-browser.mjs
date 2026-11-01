@@ -1,5 +1,5 @@
 import {chromium} from 'playwright';import {existsSync} from 'node:fs';import {mkdir,writeFile} from 'node:fs/promises';import assert from 'node:assert/strict';import {mockPng} from '../server/image-card/png.mjs';
-const executablePath=process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH||(process.platform==='win32'&&existsSync('C:/Program Files/Google/Chrome/Application/chrome.exe')?'C:/Program Files/Google/Chrome/Application/chrome.exe':undefined);
+const executablePath=process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH||(process.platform==='win32'&&existsSync('C:/Program Files/Google/Chrome/Application/chrome.exe')?'C:/Program Files/Google/Chrome/Application/chrome.exe':process.platform==='darwin'&&existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':undefined);
 const browser=await chromium.launch({headless:true,executablePath});const out='.local/browser';await mkdir(out,{recursive:true});
 const checks=[],errors=[],calls=[];const check=(name,value)=>{assert.ok(value,name);checks.push(name);};
 const base=process.env.WORKBENCH_URL||'http://127.0.0.1:5191';

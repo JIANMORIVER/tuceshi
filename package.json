@@ -1,6 +1,29 @@
 {
- "name":"life-map-image-workbench","version":"0.1.0","private":true,"type":"module","engines":{"node":">=22.18"},
- "scripts":{"dev":"node scripts/dev.mjs","build":"vite build && node scripts/build-domain.mjs","check":"tsc --noEmit","start":"node server/index.mjs","test":"node scripts/build-domain.mjs && node --test tests/*.test.mjs","test:browser":"node scripts/verify-browser.mjs","package":"node scripts/package.mjs"},
- "dependencies":{"react":"19.2.0","react-dom":"19.2.0"},
- "devDependencies":{"@types/react":"19.2.2","@types/react-dom":"19.2.2","typescript":"5.9.3","vite":"7.1.7","playwright":"1.62.1"}
+ "name": "life-map-image-workbench",
+ "version": "0.1.1",
+ "private": true,
+ "type": "module",
+ "engines": {
+  "node": ">=22.18"
+ },
+ "scripts": {
+  "dev": "node scripts/dev.mjs",
+  "build": "vite build && node scripts/build-domain.mjs",
+  "check": "tsc --noEmit",
+  "start": "node server/index.mjs",
+  "test": "node scripts/build-domain.mjs && node --test tests/*.test.mjs",
+  "test:browser": "node scripts/verify-browser.mjs",
+  "package": "node scripts/package.mjs"
+ },
+ "dependencies": {
+  "react": "19.2.0",
+  "react-dom": "19.2.0"
+ },
+ "devDependencies": {
+  "@types/react": "19.2.2",
+  "@types/react-dom": "19.2.2",
+  "typescript": "5.9.3",
+  "vite": "7.1.7",
+  "playwright": "1.62.1"
+ }
 }

@@ -22,7 +22,7 @@ export async function createWorkbenchServer(options={}){
   if(await ai(req,res))return;
   const path=new URL(req.url,'http://localhost').pathname;
   if(path.startsWith('/api/'))return json(res,{error:'接口不存在'},404);
-  let decoded;try{decoded=decodeURIComponent(path);}catch{return json(res,{error:'路径无效'},400);}
+  let decoded;try{decoded=decodeURIComponent(path).replace(/\\/g,'/');}catch{return json(res,{error:'路径无效'},400);}
   const file=resolve(staticRoot,'.'+(decoded==='/'?'/index.html':decoded));
   if(!file.startsWith(staticRoot+sep)||!['GET','HEAD'].includes(req.method))return json(res,{error:'路径不可访问'},403);
   try{const bytes=await readFile(file);res.writeHead(200,{'content-type':{'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.svg':'image/svg+xml'}[extname(file)]||'application/octet-stream','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(req.method==='HEAD'?undefined:bytes);}catch{return json(res,{error:'文件不存在，请先 npm run build'},404);}
