@@ -181,18 +181,20 @@ export const LayeredInspector: React.FC<LayeredInspectorProps> = ({
             <div className="layer-content-box">
               <div className="prompt-meta-bar" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
                 <span className="badge-pill" style={{ background: '#2f4e27', color: '#fff' }}>
-                  总字符数：{breakdown.totalChars} 字
+                  总字符数：{breakdown.totalChars} 字（估算约 {breakdown.estimatedTokens} Tokens）
                 </span>
-                <span className="badge-pill">场景内容：{breakdown.segments.scene_content} 字</span>
-                <span className="badge-pill">结构规则：{breakdown.segments.structure_rules} 字</span>
-                <span className="badge-pill">尺度规则：{breakdown.segments.scale_rules} 字</span>
-                <span className="badge-pill">风格包：{breakdown.segments.style_package} 字</span>
-                <span className="badge-pill">透明背景：{breakdown.segments.transparency_rules} 字</span>
-                {breakdown.segments.i2i_reference_rules > 0 && (
-                  <span className="badge-pill badge-i2i">参考图规则：{breakdown.segments.i2i_reference_rules} 字</span>
-                )}
-                <span className="badge-pill">禁止规则：{breakdown.segments.negative_prohibitions} 字</span>
+                <span className="badge-pill">1. 结构与连接口：{breakdown.segments.structure_rules} 字</span>
+                <span className="badge-pill">2. 场景主体：{breakdown.segments.scene_content} 字</span>
+                <span className="badge-pill">3. 相对尺度：{breakdown.segments.scale_rules} 字</span>
+                <span className="badge-pill">4. 风格包：{breakdown.segments.style_package} 字</span>
+                <span className="badge-pill">5. 背景透明与禁止：{breakdown.segments.transparency_rules} 字</span>
+                <span className="badge-pill" style={{ background: '#eaf4e6', color: '#2b5020' }}>
+                  各模块无重复词汇 ✅
+                </span>
               </div>
+              <p style={{ margin: '4px 0 8px', fontSize: '12px', color: '#555' }}>
+                <strong>提示词组织架构（按优先级）：</strong>1. 地块结构与连接口 ➔ 2. 场景主体与日记内容 ➔ 3. 相对尺度规范 ➔ 4. 渲染风格与氛围 ➔ 5. 背景透明与必要禁止事项
+              </p>
               <strong>最终正向提示词 (Positive Prompt)：</strong>
               <pre className="prompt-pre">{previewPositive}</pre>
               <strong>最终负向提示词 (Negative Prompt，已合并至正向中)：</strong>

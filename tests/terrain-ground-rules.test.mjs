@@ -6,7 +6,7 @@ test('both image routes use identical ground footprint, thin uniform base and mo
   const prompt=build('主景为山脚下的一间小屋，内部有山坡和树木。');
   assert.equal(prompt.positive.split(GROUND_RULES).length,2);
   for(const text of ['1.68:1','83%','55.3%','3%','左右两侧厚度一致','同一基准面','地块内部高于','不要把所有内部地形压平','不裁断主体','不画翘边、卷边','四条笔直边','不要把所有内部地形压平'])assert.ok(GROUND_RULES.includes(text),text);
-  assert.ok(prompt.positive.indexOf(GROUND_RULES)>prompt.positive.indexOf('主景为山脚'));
+  assert.ok(prompt.positive.indexOf(GROUND_RULES)<prompt.positive.indexOf('主景为山脚'));
  }
 });
 test('route-specific background and native no-negative-prompt contracts stay intact',()=>{

@@ -92,10 +92,23 @@ export interface ImageReferenceMeta {
   size_bytes?: number;
 }
 
+export interface PromptModuleDetail {
+  id: 'structure' | 'scene' | 'scale' | 'style' | 'transparency_and_negatives' | string;
+  name: string;
+  content: string;
+  char_count: number;
+  duplicate_check?: {
+    has_internal_duplicates: boolean;
+    duplicate_keywords: string[];
+  };
+}
+
 export interface GenerationAuditReport {
   final_prompt: string;
   total_prompt_chars: number;
+  estimated_tokens?: number;
   prompt_segments: PromptSegmentLengths;
+  prompt_modules?: PromptModuleDetail[];
   images_meta: {
     count: number;
     details: ImageReferenceMeta[];

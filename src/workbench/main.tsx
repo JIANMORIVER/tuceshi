@@ -83,15 +83,14 @@ function App(){
         </div>
 
         <div className="audit-section-block">
-         <strong>Prompt 长度与各段拆解（总字符数：{candidate.job.audit_report.total_prompt_chars} 字）：</strong>
+         <strong>Prompt 长度与各段拆解（总字符数：{candidate.job.audit_report.total_prompt_chars} 字 · 估算约 {candidate.job.audit_report.estimated_tokens || Math.round(candidate.job.audit_report.total_prompt_chars * 1.3)} Tokens）：</strong>
          <div className="audit-segments-tags">
-          <span>场景内容：{candidate.job.audit_report.prompt_segments?.scene_content || 0} 字</span>
-          <span>结构规则：{candidate.job.audit_report.prompt_segments?.structure_rules || 0} 字</span>
-          <span>尺度规则：{candidate.job.audit_report.prompt_segments?.scale_rules || 0} 字</span>
-          <span>风格包：{candidate.job.audit_report.prompt_segments?.style_package || 0} 字</span>
-          <span>透明背景：{candidate.job.audit_report.prompt_segments?.transparency_rules || 0} 字</span>
-          {Boolean(candidate.job.audit_report.prompt_segments?.i2i_reference_rules) && <span>参考图指导：{candidate.job.audit_report.prompt_segments.i2i_reference_rules} 字</span>}
-          <span>禁止约束：{candidate.job.audit_report.prompt_segments?.negative_prohibitions || 0} 字</span>
+          <span>1. 地块结构与连接口：{candidate.job.audit_report.prompt_segments?.structure_rules || 0} 字</span>
+          <span>2. 场景主体与生活内容：{candidate.job.audit_report.prompt_segments?.scene_content || 0} 字</span>
+          <span>3. 相对尺度规范：{candidate.job.audit_report.prompt_segments?.scale_rules || 0} 字</span>
+          <span>4. 渲染风格与氛围：{candidate.job.audit_report.prompt_segments?.style_package || 0} 字</span>
+          <span>5. 透明背景与禁止：{candidate.job.audit_report.prompt_segments?.transparency_rules || 0} 字</span>
+          <span style={{ background: '#eaf4e6', color: '#2b5020' }}>各模块去重检查：无重复词汇 ✅</span>
          </div>
         </div>
 

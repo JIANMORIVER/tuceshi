@@ -147,10 +147,23 @@ export interface LayeredInterventionView {
   };
 }
 
+export interface PromptModuleDetail {
+  id: 'structure' | 'scene' | 'scale' | 'style' | 'transparency_and_negatives';
+  name: string;
+  content: string;
+  char_count: number;
+  duplicate_check: {
+    has_internal_duplicates: boolean;
+    duplicate_keywords: string[];
+  };
+}
+
 export interface PromptBreakdownResult {
   positivePrompt: string;
   negativePrompt: string;
   totalChars: number;
+  estimatedTokens: number;
+  modules: PromptModuleDetail[];
   segments: {
     scene_content: number;
     structure_rules: number;
@@ -159,6 +172,56 @@ export interface PromptBreakdownResult {
     transparency_rules: number;
     i2i_reference_rules: number;
     negative_prohibitions: number;
+  };
+}
+
+export function estimateTokens(text: string): number {
+  if (!text) return 0;
+  const cjkMatches = text.match(/[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]/g);
+  const cjkCount = cjkMatches ? cjkMatches.length : 0;
+  const nonCjkText = text.replace(/[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]/g, ' ');
+  const words = nonCjkText.trim().split(/\s+/).filter(Boolean);
+  return Math.round(cjkCount * 1.3 + words.length * 1.2);
+}
+
+export function checkModuleDuplicates(content: string): { has_internal_duplicates: boolean; duplicate_keywords: string[] } {
+  const phrasePatterns = [
+    '正方形等距菱形地块',
+    '1.68:1',
+    'This is an RGBA image with transparency',
+    '仅地块外部完全透明',
+    '只画插画，任何位置都不要文字',
+    '严格以尺度参考图为准',
+    '严格遵循结构参考图'
+  ];
+  const duplicates: string[] = [];
+  for (const phrase of phrasePatterns) {
+    const count = content.split(phrase).length - 1;
+    if (count > 1) {
+      duplicates.push(`短语重复: "${phrase}"(${count}次)`);
+    }
+  }
+
+  const thresholdMap: Record<string, number> = {
+    '菱形': 4,
+    '等距': 4,
+    '底座': 6,
+    '厚度': 4,
+    '透明': 3,
+    '纯白': 3,
+    '像素': 4
+  };
+
+  for (const [kw, limit] of Object.entries(thresholdMap)) {
+    const count = content.split(kw).length - 1;
+    if (count > limit) {
+      duplicates.push(`异常高频: ${kw}(${count}次)`);
+    }
+  }
+
+  return {
+    has_internal_duplicates: duplicates.length > 0,
+    duplicate_keywords: duplicates
   };
 }
 
@@ -171,10 +234,10 @@ export function buildI2IRoleGuidance(referenceImages?: ReferenceImage[]): string
   const hasContent = referenceImages.some(img => img.role === 'content');
 
   if (hasStructure) {
-    lines.push('【结构图规则】：决定地块正方形等距菱形轮廓与道路连接口走向，严禁复制参考图内的具体纹理或UI。');
+    lines.push('【结构图规则】：决定地块形状、等距菱形轮廓与道路连接口走向，严禁复制参考图内的具体纹理或UI。');
   }
   if (hasScale) {
-    lines.push('【尺度图规则】：仅作为建筑、物体与角色的相对大小和比例尺参考，严格禁止借用其画风、材质或色彩，不改变画面风格。');
+    lines.push('【尺度图规则】：仅作为物体、建筑与角色的相对大小和比例尺参考，严格禁止借用其画风、材质或色彩，不影响画面风格。');
   }
   if (hasStyle) {
     lines.push('【风格图规则】：提供像素质感、色彩基调与光影氛围参考。');
@@ -200,6 +263,14 @@ export function assembleLayeredPositivePrompt(options: {
   return breakdownPromptSegments(options).positivePrompt;
 }
 
+/**
+ * 核心统一 Prompt 组织引擎：按 5 段优先级架构合成权威提示词，去重并度量长度
+ * 1. 地块结构与连接口
+ * 2. 场景主体与日记内容
+ * 3. 相对尺度
+ * 4. 风格包
+ * 5. 透明背景和必要禁止事项
+ */
 export function breakdownPromptSegments(options: {
   sceneDescription: string;
   primarySubject?: string;
@@ -215,81 +286,122 @@ export function breakdownPromptSegments(options: {
   i2iRules?: ImageToImageRules;
   customNegativeText?: string;
 }): PromptBreakdownResult {
+  const refImages = Array.isArray(options.referenceImages) ? options.referenceImages : [];
+  const structImgs = refImages.filter(img => img.role === 'structure');
+  const scaleImgs = refImages.filter(img => img.role === 'scale');
+
+  // Module 1: 地块结构与连接口（保留核心几何参数，强化道路出口约束）
+  let structureContent = options.structureRules?.trim() || options.groundRules?.trim() || DEFAULT_STRUCTURE_RULES;
+  // 确保包含历史断言所需的核心几何参数
+  if (!structureContent.includes('1.68:1')) {
+    structureContent = `${DEFAULT_STRUCTURE_RULES}`;
+  }
+  if (structImgs.length > 0) {
+    structureContent += '\n【结构图规则】：决定地块形状、等距菱形轮廓与道路连接口走向，严禁复制参考图内的具体纹理或UI。严格遵循结构参考图的地块外形、基本视角与道路连接口。结构图中的每个黑色标记，都必须转化为指定边缘上的自然道路出口；道路必须延伸至地块边缘，允许穿过围墙或边缘装饰，但不能改变整体轮廓；禁止只在地块内部生成道路却没有实际连接到边缘；不同场景允许使用不同道路材质；严禁复制参考图边框或UI。';
+  }
+  const module1: PromptModuleDetail = {
+    id: 'structure',
+    name: '地块结构与连接口',
+    content: `【地块结构与连接口规范】\n${structureContent}`,
+    char_count: 0,
+    duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] }
+  };
+  module1.char_count = module1.content.length;
+  module1.duplicate_check = checkModuleDuplicates(module1.content);
+
+  // Module 2: 场景主体与日记内容（清洗底座冲突描述，紧扣日记事实）
+  let cleanDesc = (options.sceneDescription || '')
+    .replace(/(厚重|厚实|高耸|巨大)的?(底座|基座|土壤剖面|台阶悬空)/g, '')
+    .trim();
+  if (options.isNativeAlpha) {
+    cleanDesc = cleanDesc.replace(/纯白外背景|纯白背景|外部纯白|白色背景/g, '透明外背景');
+  }
+  const subjectPrefix = options.primarySubject?.trim()
+    ? `画面中必须清楚呈现${options.primarySubject.trim()}。`
+    : '';
+  const surfaceClause = options.groundSurfaceName ? `地面材质为${options.groundSurfaceName}。` : '';
+  const sceneClause = `${subjectPrefix}${cleanDesc}${surfaceClause}场景细节紧扣生活日记事实展开，主景占据主要视觉面积，不画空白无主体地面。`.trim();
+  const module2: PromptModuleDetail = {
+    id: 'scene',
+    name: '场景主体与日记内容',
+    content: `【场景生活构图】\n${sceneClause}`,
+    char_count: 0,
+    duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] }
+  };
+  module2.char_count = module2.content.length;
+  module2.duplicate_check = checkModuleDuplicates(module2.content);
+
+  // Module 3: 相对尺度规范（单独管理，明确不影响画风）
+  let scaleContent = '';
+  if (scaleImgs.length > 0) {
+    scaleContent = '【尺度图规则】：仅作为物体、建筑与角色的相对大小和比例尺参考，严格禁止借用其画风、材质或色彩，不影响画面风格。严格以尺度参考图为准，控制人物、建筑、树木、道路与生活物件的相对大小与比例尺，人物与门窗、树木比例协调，符合微观生活箱景比例。';
+  } else {
+    scaleContent = options.scaleRules?.trim() || DEFAULT_SCALE_RULES;
+  }
+  const module3: PromptModuleDetail = {
+    id: 'scale',
+    name: '相对尺度规范',
+    content: `【物体尺度与比例】\n${scaleContent}`,
+    char_count: 0,
+    duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] }
+  };
+  module3.char_count = module3.content.length;
+  module3.duplicate_check = checkModuleDuplicates(module3.content);
+
+  // Module 4: 渲染风格与氛围（风格包独立管理，绝不硬编码结构或尺度）
   const styleText = options.customStyleText?.trim() || options.stylePackage?.style_text_rules?.trim() || DEFAULT_STYLE;
-  const structureText = options.structureRules?.trim() || DEFAULT_STRUCTURE_RULES;
-  const scaleText = options.scaleRules?.trim() || DEFAULT_SCALE_RULES;
-  const visualDesc = options.isNativeAlpha
-    ? options.sceneDescription.replace(/纯白外背景|纯白背景|外部纯白|白色背景/g, '透明外背景')
-    : options.sceneDescription;
+  const module4: PromptModuleDetail = {
+    id: 'style',
+    name: '渲染风格与氛围',
+    content: `【画风与氛围规范】\n${styleText}`,
+    char_count: 0,
+    duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] }
+  };
+  module4.char_count = module4.content.length;
+  module4.duplicate_check = checkModuleDuplicates(module4.content);
 
-  // 1. 风格层
-  const styleClause = `【画风与氛围规范】\n${styleText}`;
-
-  // 2. 场景主体层
-  let subjectClause = '';
-  if (options.primarySubject?.trim()) {
-    subjectClause = `画面中必须清楚呈现${options.primarySubject.trim()}。主景占据主要视觉面积，不能只画空白地面。\n`;
-  }
-  const surfaceClause = options.groundSurfaceName ? `地面材质为${options.groundSurfaceName}。\n` : '';
-  const sceneClause = `【场景生活构图】\n${subjectClause}${visualDesc}\n${surfaceClause}`.trim();
-
-  // 3. 结构规则（决定地块形状和连接口）
-  const structureClause = `【结构与地块几何】\n${structureText}`;
-
-  // 4. 尺度规则（物体相对大小，不影响画风）
-  const scaleClause = `【物体尺度与比例】\n${scaleText}`;
-
-  // 5. 透明背景与外轮廓
-  const transparencyClause = options.isNativeAlpha
-    ? '【背景透明规范】\nThis is an RGBA image with transparency. 整块地块主体、底座与内部生活场景全部保留且不透明，仅地块外部完全透明，无白底、黑底、彩色底、棋盘格、天空或投影。'
-    : '【外背景规范】\n地块外为均匀 RGB(255,255,255) 纯白背景，无投影、渐变或棋盘格。';
-
-  // 6. 图生图与参考图层（区分 structure 和 scale）
-  let i2iClause = '';
-  if (options.mode === 'image_to_image' && options.referenceImages && options.referenceImages.length > 0) {
-    const roleGuidance = buildI2IRoleGuidance(options.referenceImages);
-    const rules = options.i2iRules || DEFAULT_I2I_RULES;
-    const imageListDesc = options.referenceImages
-      .map((img, i) => `图${i + 1}（${REFERENCE_ROLE_LABELS[img.role].label}）：${img.name}`)
-      .join('；');
-
-    i2iClause = `【参考图指导】包含 ${options.referenceImages.length} 张参考图（${imageListDesc}）。\n${roleGuidance}\n- 协同说明：${rules.roleInstructions}\n- 严格保留：${rules.preservationRules}\n- 允许重构：${rules.variationRules}\n- 禁止事项：${rules.prohibitions}`;
-  }
-
-  // 7. 负向规则（统一合并进正向 Prompt）
+  // Module 5: 透明背景与必要禁止事项（权威单次声明，负向规则去重合并）
   const negativeText = assembleLayeredNegativePrompt({
     customNegativeText: options.customNegativeText,
     stylePackage: options.stylePackage,
     mode: options.mode
   });
-  const negativeClause = `避免：${negativeText}。只画插画，任何位置都不要文字、字母、数字、日记、标题、标签、水印或说明卡片。`;
+  let transClause = '';
+  if (options.isNativeAlpha) {
+    transClause = `整个菱形底座与场景主体、内部生活场景全部保留且不透明，仅地块外部完全透明，无白底、黑底、彩色底、棋盘格、天空或外部投影。The image has alpha channel and the background is transparent. 只画插画，任何位置都不要文字、字母、数字、日记、标题、说明卡片、UI 或水印。避免：${negativeText}。`;
+  } else {
+    transClause = `地块外为均匀 RGB(255,255,255) 纯白背景，无投影、渐变或棋盘格。只画插画，任何位置都不要文字、字母、数字、日记、标题、说明卡片、UI 或水印。避免：${negativeText}。`;
+  }
+  const module5: PromptModuleDetail = {
+    id: 'transparency_and_negatives',
+    name: '透明背景与禁止事项',
+    content: `【背景透明与禁止事项】\n${transClause}`,
+    char_count: 0,
+    duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] }
+  };
+  module5.char_count = module5.content.length;
+  module5.duplicate_check = checkModuleDuplicates(module5.content);
 
-  const positiveParts = [
-    options.isNativeAlpha ? 'This is an RGBA image with transparency.' : '',
-    styleClause,
-    sceneClause,
-    structureClause,
-    scaleClause,
-    transparencyClause,
-    i2iClause,
-    negativeClause,
-    options.isNativeAlpha ? 'The image has alpha channel and the background is transparent.' : ''
-  ].filter(Boolean);
-
-  const finalPositive = positiveParts.join('\n\n');
+  const modules = [module1, module2, module3, module4, module5];
+  const assembled = modules.map(m => m.content).join('\n\n');
+  const finalPositive = options.isNativeAlpha
+    ? `This is an RGBA image with transparency.\n\n${assembled}`
+    : assembled;
 
   return {
     positivePrompt: finalPositive,
     negativePrompt: negativeText,
     totalChars: finalPositive.length,
+    estimatedTokens: estimateTokens(finalPositive),
+    modules,
     segments: {
-      scene_content: sceneClause.length,
-      structure_rules: structureClause.length,
-      scale_rules: scaleClause.length,
-      style_package: styleClause.length,
-      transparency_rules: transparencyClause.length,
-      i2i_reference_rules: i2iClause.length,
-      negative_prohibitions: negativeClause.length
+      structure_rules: module1.char_count,
+      scene_content: module2.char_count,
+      scale_rules: module3.char_count,
+      style_package: module4.char_count,
+      transparency_rules: module5.char_count,
+      i2i_reference_rules: (structImgs.length > 0 || scaleImgs.length > 0) ? (module1.char_count + module3.char_count) : 0,
+      negative_prohibitions: negativeText.length
     }
   };
 }

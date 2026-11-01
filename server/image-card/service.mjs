@@ -34,12 +34,16 @@ export function buildAuditReport({ record, input, generated, error }) {
   const httpStatus = generated?.httpStatus || (error ? (error.details?.httpStatus || error.status || 500) : 200);
   const contentType = generated?.contentType || error?.details?.contentType || "application/json; charset=utf-8";
 
+  const estTokens = record?.prompt?.estimatedTokens || Math.round(positive.length * 1.3);
+  const modules = record?.prompt?.modules || [];
   const reqId = record?.requestId || error?.details?.requestId || undefined;
 
   return {
     final_prompt: positive,
     total_prompt_chars: positive.length,
+    estimated_tokens: estTokens,
     prompt_segments: segments,
+    prompt_modules: modules,
     images_meta: {
       count: refImages.length,
       details: imageDetails,

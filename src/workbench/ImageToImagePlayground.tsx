@@ -120,13 +120,19 @@ export const ImageToImagePlayground: React.FC<ImageToImagePlaygroundProps> = ({
         break;
       }
 
+      const existingRoles = (lab.referenceImages || []).map(r => r.role);
+      // 默认角色推导：首张为 structure，已有 structure 则优先建议 scale，允许用户后续手动切换；绝不依据文件名篡改
+      const initialRole: ReferenceImageRole = existingRoles.includes('structure')
+        ? (existingRoles.includes('scale') ? 'style' : 'scale')
+        : 'structure';
+
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
         onAddReferenceImage({
           id: `ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           name: file.name,
-          role: 'structure',
+          role: initialRole,
           dataUrl,
           sizeBytes: file.size
         });
@@ -176,7 +182,7 @@ export const ImageToImagePlayground: React.FC<ImageToImagePlaygroundProps> = ({
 
       <p className="hint">
         {lab.mode === 'image_to_image'
-          ? '已开启图生图模式：上传 1~3 张参考图，并明确分配角色（底图结构、风格配色、局部物件）。'
+          ? '已开启图生图模式：分别管理【结构底图 Structure】（控制外形与道路出口）与【尺度参考图 Scale】（控制物体相对比例且不影响画风，可选），各自独立生效。'
           : '当前为纯文生图：仅依赖日记构图与文本提示词生成。勾选【图生图】可引入参考图协同生成。'}
       </p>
 
