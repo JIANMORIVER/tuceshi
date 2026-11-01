@@ -15,30 +15,45 @@ export function completeSceneDescription(input) {
   // Only visual composition reaches Qwen: never append raw diary, titles or survey transcripts.
   return `画面中必须清楚呈现${plan.primary_subject.trim()}。${plan.scene_description.trim()}${plan.terrain?.name?`地面材质为${String(plan.terrain.name).slice(0,100)}。`:''}`;
 }
-export function buildCompleteScenePrompt(description) {
-  return { version:COMPLETE_SCENE_PROMPT_VERSION,style:STYLE,scene:description,boundaries:'单张完整场景；纯白外背景；Alpha 与锚点待验证',
-    positive:`${STYLE}\n${description}\n主体与相关物件必须真实出现在画面中，主景占据主要视觉面积，不能只画空白草地。\n${GROUND_RULES}\n地块外为均匀 RGB(255,255,255) 纯白背景，无投影、渐变或棋盘格。只画插画；任何位置都不要文字、字母、数字、日记、标题、标签、水印或说明卡片。屏幕和便签仅用无字色块表达。`,negative:`${NEGATIVE}，空白草地，没有主体，日记文字，文字排版，说明文字，信息面板，厚重土壤剖面，左右底座厚度不一致，锥形悬浮岛，翘边，卷边，底板弯曲，翻折地块` };
+export function buildCompleteScenePrompt(description, options={}) {
+  const style = options.style?.trim() || STYLE;
+  const ground = options.groundRules?.trim() || GROUND_RULES;
+  const customNegative = options.negativeRules?.trim() ? `，${options.negativeRules.trim()}` : '';
+  const i2iSection = (options.mode === 'image_to_image' && options.referenceImages?.length > 0)
+    ? `\n【参考图指导】包含 ${options.referenceImages.length} 张参考图。${options.i2iRules?.roleInstructions || ''}；${options.i2iRules?.preservationRules || ''}；${options.i2iRules?.variationRules || ''}；${options.i2iRules?.prohibitions || ''}`
+    : '';
+  return { version:COMPLETE_SCENE_PROMPT_VERSION,style,scene:description,boundaries:'单张完整场景；纯白外背景；Alpha 与锚点待验证',
+    positive:`${style}\n${description}\n主体与相关物件必须真实出现在画面中，主景占据主要视觉面积，不能只画空白草地。\n${ground}\n地块外为均匀 RGB(255,255,255) 纯白背景，无投影、渐变或棋盘格。只画插画；任何位置都不要文字、字母、数字、日记、标题、标签、水印或说明卡片。屏幕和便签仅用无字色块表达。${i2iSection}`,negative:`${NEGATIVE}${customNegative}，空白草地，没有主体，日记文字，文字排版，说明文字，信息面板，厚重土壤剖面，左右底座厚度不一致，锥形悬浮岛，翘边，卷边，底板弯曲，翻折地块${options.mode === 'image_to_image' ? '，复制参考图边框，复制参考图UI，复制参考图水印' : ''}` };
 }
-export function buildNativeScenePrompt(description) {
+export function buildNativeScenePrompt(description, options={}) {
   const visual=description.replace(/纯白外背景|纯白背景|外部纯白|白色背景/g,'透明外背景');
-  return {version:NATIVE_SCENE_PROMPT_VERSION,style:STYLE,scene:visual,boundaries:'原生 RGBA；整块地形保留；外部透明；薄且等厚底座，地表基准待核验',
-    positive:`This is an RGBA image with transparency.\n${STYLE}\n${visual}\n主景、建筑、树木、人物、地面、道路及整个菱形底座全部保留，组成一个完整场景。底座和内部场景不透明，只有整个地块外部透明。\n${GROUND_RULES}\n完整主体留在画布内并保留边距，不单独提取建筑，不裁切底座。地块外不画白底、彩色底、棋盘格、投影或天空。只画插画，不要文字、字母、数字、标签、UI 或水印。\n避免：${NEGATIVE}。\nThe image has alpha channel and the background is transparent.`,negative:''};
+  const style = options.style?.trim() || STYLE;
+  const ground = options.groundRules?.trim() || GROUND_RULES;
+  const i2iSection = (options.mode === 'image_to_image' && options.referenceImages?.length > 0)
+    ? `\n【参考图指导】包含 ${options.referenceImages.length} 张参考图。${options.i2iRules?.roleInstructions || ''}；${options.i2iRules?.preservationRules || ''}；${options.i2iRules?.variationRules || ''}；${options.i2iRules?.prohibitions || ''}`
+    : '';
+  return {version:NATIVE_SCENE_PROMPT_VERSION,style,scene:visual,boundaries:'原生 RGBA；整块地形保留；外部透明；薄且等厚底座，地表基准待核验',
+    positive:`This is an RGBA image with transparency.\n${style}\n${visual}\n主景、建筑、树木、人物、地面、道路及整个菱形底座全部保留，组成一个完整场景。底座和内部场景不透明，只有整个地块外部透明。\n${ground}\n完整主体留在画布内并保留边距，不单独提取建筑，不裁切底座。地块外不画白底、彩色底、棋盘格、投影或天空。只画插画，不要文字、字母、数字、标签、UI 或水印。\n避免：${NEGATIVE}${options.negativeRules?.trim() ? `，${options.negativeRules.trim()}` : ''}。\nThe image has alpha channel and the background is transparent.${i2iSection}`,negative:''};
 }
 export class CompleteTerrainGeneration {
   constructor(settings,{storageRoot=join(PROJECT_ROOT,'.local/terrain-candidates'),adapter}={}){this.settings=settings;this.storageRoot=storageRoot;this.adapter=adapter;this.queue=Promise.resolve();}
-  service(config=this.settings.imageConfig()){return new ImageGenerationService(config,{storageRoot:this.storageRoot,promptBuilder:config.generationRoute==='native-alpha'?buildNativeScenePrompt:buildCompleteScenePrompt,...(this.adapter?{adapter:this.adapter}:{})});}
+  service(config=this.settings.imageConfig(), labConfig={}){
+    const promptBuilder = (desc) => (config.generationRoute==='native-alpha' ? buildNativeScenePrompt(desc, labConfig) : buildCompleteScenePrompt(desc, labConfig));
+    return new ImageGenerationService(config,{storageRoot:this.storageRoot,promptBuilder,...(this.adapter?{adapter:this.adapter}:{})});
+  }
   generate(input){
     if(!input || !['candidate_1','candidate_2'].includes(input.candidate_id) || typeof input.planning_run_id!=='string' || !input.planning_run_id || input.planning_run_id.length>200 || typeof input.snapshot?.input_text!=='string')throw new ImageCardError('INPUT_INVALID','候选需要当天快照与独立批次。',400);
     const description=completeSceneDescription(input);
     const id=input.client_request_id||stableRequestId(`${input.planning_run_id}:${input.candidate_id}`);
     if(!validId(id))throw new ImageCardError('INPUT_INVALID','生成请求 ID 无效。',400);
     const config=this.settings.terrainConfig(input.image_pipeline);
+    const labConfig = input.lab_config || {};
     const operation=this.queue.then(async()=>{
       // Read immutable old jobs before preflight: switching settings never reprocesses/rebills them.
-      let record;try{record=await this.service(config).record(id);}catch(e){if(e.code!=='NOT_FOUND')throw e;}
+      let record;try{record=await this.service(config, labConfig).record(id);}catch(e){if(e.code!=='NOT_FOUND')throw e;}
       if(record)return {job:jobFromTerrainRecord(record,input)};
       if(input.model_config?.provider!=='mock'&&config.generationRoute==='qwen-851'&&!this.settings.backgroundConfig().apiToken)throw new ImageCardError('REPLICATE_KEY_MISSING','请先配置 Replicate Token，再使用普通生成＋851 Labs；尚未提交生图。',503);
-      return {job:jobFromTerrainRecord(await this.service(config).generate({requestId:id,description,count:1,mode:input.model_config?.provider==='mock'?'mock':'real'}),input)};
+      return {job:jobFromTerrainRecord(await this.service(config, labConfig).generate({requestId:id,description,count:1,mode:input.model_config?.provider==='mock'?'mock':'real',labConfig}),input)};
     });
     this.queue=operation.then(()=>undefined,()=>undefined);return operation;
   }

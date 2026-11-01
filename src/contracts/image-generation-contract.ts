@@ -88,6 +88,9 @@ export interface GenerationJob {
   prompt_version: string;
   submitted_prompt: ImagePromptComposition;
   request_status: GenerationJobStatus;
+  generation_mode?: "text_to_image" | "image_to_image";
+  reference_images?: Array<{ id: string; name: string; role: string; dataUrl: string }>;
+  lab_config?: Record<string, unknown>;
   provider_task_id?: string;              // 阿里云百炼 DashScope 异步任务 ID
   artifact_id?: string;                   // 本地持久化存储的图片标识，如 "art_img_..."
   image_url?: string;                     // 本地读取静态路由或数据 URL
@@ -108,6 +111,7 @@ export interface ImageGenerationRequest {
   candidate_plan: SymbolicSceneCandidatePlan;
   model_config?: ImageModelConfig | LabModelConfig;
   prompt_override?: Partial<ImagePromptComposition>;
+  lab_config?: Record<string, unknown>;
 }
 
 export interface ImageTaskQueryRequest {

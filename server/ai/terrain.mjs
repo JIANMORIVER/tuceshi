@@ -16,8 +16,10 @@ export function terrainDescription(input) {
 }
 export function jobFromTerrainRecord(record, input) {
   const prompt = record.prompt || buildPrompt(record.input);
+  const labConfig = record.labConfig || input.lab_config;
   return { job_id: `terrain:${record.id}`, planning_run_id: input.planning_run_id, candidate_id: input.candidate_id,
     ...(record.generationRoute?{generation_route:record.generationRoute}:{}),
+    ...(labConfig ? { lab_config: labConfig, generation_mode: labConfig.mode || 'text_to_image', reference_images: labConfig.reference_images || [] } : {}),
     provider: record.mode === "real" ? "qwen" : "mock", model: record.model, prompt_version: prompt.version,
     submitted_prompt: { prompt_version: prompt.version, positive_prompt: prompt.positive, negative_prompt: prompt.negative, composition_hints: ["complete isometric illustration", "ground calibration unverified"], style_keywords: ["2.5D", "pixel art"], diary_summary: "当天聚合日记", selected_events_summary: record.input, symbolic_anchor: input.candidate_plan?.symbolic_anchor || "", terrain_name: "完整图片地块", core_props: [] },
     request_status: record.status === "processing" ? "timed_out_or_pending_recovery" : record.status,

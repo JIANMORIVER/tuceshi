@@ -18,14 +18,23 @@ export async function readBounded(response, limit) {
 }
 export class DashScopeAdapter {
   constructor(fetcher = fetch) { this.fetcher = fetcher.bind(globalThis); }
-  async generate(config, prompt, signal) {
+  async generate(config, prompt, signal, options = {}) {
     if (!config.apiKey) throw new ImageCardError("API_KEY_MISSING", "服务端尚未配置百炼 API Key，可切换到 Mock 测试。", 503);
     let response;
+    const requestContent = [];
+    if (options.mode === 'image_to_image' && Array.isArray(options.referenceImages)) {
+      for (const img of options.referenceImages) {
+        if (img && typeof img.dataUrl === 'string' && img.dataUrl.trim()) {
+          requestContent.push({ image: img.dataUrl.trim() });
+        }
+      }
+    }
+    requestContent.push({ text: prompt.positive });
     try {
       response = await this.fetcher(`${config.baseUrl}/api/v1/services/aigc/multimodal-generation/generation`, {
         method: "POST", redirect: "manual", signal,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-        body: JSON.stringify({ model: config.model, input: { messages: [{ role: "user", content: [{ text: prompt.positive }] }] },
+        body: JSON.stringify({ model: config.model, input: { messages: [{ role: "user", content: requestContent }] },
           parameters: { size: config.size, n: 1, ...(!config.model.startsWith('qwen-image-2.1-') ? {negative_prompt: prompt.negative} : {}), prompt_extend: false, watermark: false } })
       });
     } catch { if (signal.aborted) throw signal.reason; throw new ImageCardError("NETWORK_ERROR", "无法连接百炼服务，请检查网络后手动重试。"); }

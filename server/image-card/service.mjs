@@ -41,16 +41,18 @@ export class ImageGenerationService {
       if (input.mode === "real" && !this.config.apiKey) throw new ImageCardError("API_KEY_MISSING", "服务端尚未配置百炼 API Key，可使用 Mock。", 503);
       await mkdir(this.storageRoot, { recursive: true, mode: 0o700 });
       const started = Date.now();
-      const record = { version: 1, id: input.requestId, status: "processing", input: input.description.trim(), prompt: this.promptBuilder(input.description.trim()),
+      const prompt = this.promptBuilder(input.description.trim(), input.labConfig || {});
+      const record = { version: 1, id: input.requestId, status: "processing", input: input.description.trim(), prompt,
         provider: input.mode === "mock" ? "mock" : this.config.provider, model: input.mode === "mock" ? "deterministic-pixel-fixture-v1" : this.config.model,
         mode: input.mode, region: this.config.region, requestedSize: this.config.size, createdAt: new Date().toISOString(), elapsedMs: 0,
+        ...(input.labConfig ? { labConfig: input.labConfig } : {}),
         ...(this.config.generationRoute ? {generationRoute:this.config.generationRoute} : {}) };
       await this.saveRecord(record);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(new ImageCardError("REQUEST_TIMEOUT", "请求超时；供应商可能仍在处理。请检查控制台后再决定是否手动重新生成。", 504)), this.config.timeoutMs);
       try {
         const generated = input.mode === "mock" ? { bytes: mockPng(this.config.width, this.config.height) }
-          : await this.adapter.generate(this.config, record.prompt, controller.signal);
+          : await this.adapter.generate(this.config, record.prompt, controller.signal, { referenceImages: input.labConfig?.reference_images, mode: input.labConfig?.mode });
         if (generated.requestId) record.requestId = generated.requestId;
         const dimensions = validatePng(generated.bytes);
         const filename = `${record.id}.png`;
