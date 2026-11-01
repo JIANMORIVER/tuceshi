@@ -391,6 +391,7 @@ export class Workbench {
         review_status: c.job?.manual_review?.decision === 'approved' ? 'approved' : 'pending',
         review_comment: c.job?.manual_review?.reviewed_at ? '人工审核通过' : '',
         is_selected: exp.selectedId === c.id,
+        audit_report: c.job?.audit_report,
         model_info: {
           provider: exp.provider,
           pipeline: exp.pipeline

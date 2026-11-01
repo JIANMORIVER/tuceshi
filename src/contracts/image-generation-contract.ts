@@ -73,6 +73,44 @@ export interface ImagePromptComposition {
   core_props: string[];
 }
 
+export interface PromptSegmentLengths {
+  scene_content: number;
+  structure_rules: number;
+  scale_rules: number;
+  style_package: number;
+  transparency_rules: number;
+  i2i_reference_rules: number;
+  negative_prohibitions: number;
+}
+
+export interface ImageReferenceMeta {
+  id: string;
+  name: string;
+  role: string;
+  width?: number;
+  height?: number;
+  size_bytes?: number;
+}
+
+export interface GenerationAuditReport {
+  final_prompt: string;
+  total_prompt_chars: number;
+  prompt_segments: PromptSegmentLengths;
+  images_meta: {
+    count: number;
+    details: ImageReferenceMeta[];
+    estimated_request_payload_bytes: number;
+  };
+  http_meta: {
+    status_code?: number;
+    content_type?: string;
+  };
+  backend_error_code?: string;
+  provider_raw_error_code?: string;
+  request_id?: string;
+  stage: 'client_preparation' | 'server_body_parsing' | 'qwen_submitting' | 'qwen_generating' | 'image_downloading' | 'completed' | 'failed';
+}
+
 export interface GenerationJob {
   manual_review?: { decision: "approved"; job_id: string; image_url: string; source_sha256?: string; reviewed_at: string };
   generation_route?: 'legacy-local'|'native-alpha'|'qwen-851';
@@ -97,6 +135,7 @@ export interface GenerationJob {
   created_at: string;
   completed_at?: string;
   error_message?: string;
+  audit_report?: GenerationAuditReport;
   cost_info?: {
     image_count: number;
     estimated_cost_cny?: number;

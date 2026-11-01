@@ -28,7 +28,16 @@ export function createAiHandler({cookieName="life_map_ai",settings=new ModelSett
       const cookie=new RegExp(`(?:^|;\\s*)${cookieName}=([a-f0-9]{64})(?:;|$)`).exec(req.headers.cookie||"")?.[1];
       if(!cookie||!timingSafeEqual(Buffer.from(cookie),Buffer.from(session))) throw new ImageCardError("SESSION_REQUIRED","请刷新页面后继续，已有生成不会自动重提。",403);
       if(req.method!=="POST") throw new ImageCardError("METHOD_NOT_ALLOWED","请求方法不支持。",405);
-      let body="";for await(const part of req){body+=part;if(body.length>(path==="/api/scene/recognize"?6*1024*1024:128*1024))throw new ImageCardError("INPUT_TOO_LARGE","输入过长。",413);}
+      const bodyLimit = path === "/api/terrain/generate" ? 25 * 1024 * 1024 : (path === "/api/scene/recognize" ? 6 * 1024 * 1024 : 512 * 1024);
+      let body = "";
+      let exceeded = false;
+      for await (const part of req) {
+        if (!exceeded) {
+          body += part;
+          if (body.length > bodyLimit) exceeded = true;
+        }
+      }
+      if (exceeded) throw new ImageCardError("INPUT_TOO_LARGE", `请求体过大（上限 ${Math.round(bodyLimit / (1024 * 1024))}MB），已阻止处理。`, 413);
       let data;try{data=JSON.parse(body);}catch{throw new ImageCardError("INPUT_INVALID","请求不是有效 JSON。",400);}
       if(path==="/api/model-settings")json(res,settings.update(data));
       else if(path==="/api/scene/recognize")json(res,await scene.recognize(data));

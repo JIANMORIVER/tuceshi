@@ -25,7 +25,9 @@ export function jobFromTerrainRecord(record, input) {
     request_status: record.status === "processing" ? "timed_out_or_pending_recovery" : record.status,
     provider_task_id: record.id, artifact_id: record.image?.assetId, image_url: record.image ? `/api/terrain-images/${record.id}` : undefined,
     created_at: record.createdAt, completed_at: record.status !== "processing" ? new Date(Date.parse(record.createdAt)+record.elapsedMs).toISOString() : undefined,
-    error_message: record.error?.message, imageSize: record.image ? { width:record.image.width, height:record.image.height } : undefined, calibration: { status: "unverified", alphaVerified: false, targetGroundRatio: 752/448 }, cost_info: { image_count: record.image ? 1 : 0 } };
+    error_message: record.error?.message,
+    audit_report: record.auditReport,
+    imageSize: record.image ? { width:record.image.width, height:record.image.height } : undefined, calibration: { status: "unverified", alphaVerified: false, targetGroundRatio: 752/448 }, cost_info: { image_count: record.image ? 1 : 0 } };
 }
 export class TerrainGeneration {
   constructor(settings, { storageRoot = join(PROJECT_ROOT,".local/terrain-candidates"), adapter, promptBuilder } = {}) { this.settings = settings; this.storageRoot = storageRoot; this.adapter = adapter; this.promptBuilder = promptBuilder; this.queue = Promise.resolve(); }

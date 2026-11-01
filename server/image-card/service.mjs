@@ -6,6 +6,56 @@ import { DashScopeAdapter } from "./dashscope.mjs";
 import { mockPng, validatePng } from "./png.mjs";
 
 export const validId = value => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+export function buildAuditReport({ record, input, generated, error }) {
+  const positive = record?.prompt?.positive || "";
+  const segments = record?.prompt?.segments || {
+    scene_content: record?.input?.length || 0,
+    structure_rules: 0,
+    scale_rules: 0,
+    style_package: 0,
+    transparency_rules: 0,
+    i2i_reference_rules: 0,
+    negative_prohibitions: 0
+  };
+  const refImages = Array.isArray(input?.labConfig?.reference_images) ? input.labConfig.reference_images : [];
+  let totalRefPayloadBytes = 0;
+  const imageDetails = refImages.map(img => {
+    const dataLen = typeof img.dataUrl === "string" ? img.dataUrl.length : 0;
+    const estBytes = img.sizeBytes || Math.round(dataLen * 0.75);
+    totalRefPayloadBytes += dataLen;
+    return {
+      id: img.id,
+      name: img.name,
+      role: img.role,
+      size_bytes: estBytes
+    };
+  });
+  const estTotalPayload = totalRefPayloadBytes + positive.length * 2 + 1024;
+  const httpStatus = generated?.httpStatus || (error ? (error.details?.httpStatus || error.status || 500) : 200);
+  const contentType = generated?.contentType || error?.details?.contentType || "application/json; charset=utf-8";
+
+  const reqId = record?.requestId || error?.details?.requestId || undefined;
+
+  return {
+    final_prompt: positive,
+    total_prompt_chars: positive.length,
+    prompt_segments: segments,
+    images_meta: {
+      count: refImages.length,
+      details: imageDetails,
+      estimated_request_payload_bytes: estTotalPayload
+    },
+    http_meta: {
+      status_code: httpStatus,
+      content_type: contentType
+    },
+    ...(error ? { backend_error_code: error.code || "MODEL_REQUEST_FAILED" } : {}),
+    ...(error?.details?.providerCode ? { provider_raw_error_code: error.details.providerCode } : {}),
+    ...(reqId ? { request_id: reqId } : {}),
+    stage: error ? (error.details?.stage || "failed") : "completed"
+  };
+}
+
 export class ImageGenerationService {
   constructor(config, { adapter = new DashScopeAdapter(), storageRoot = join(PROJECT_ROOT, ".local/image-card-lab"), promptBuilder = buildPrompt } = {}) {
     this.config = config; this.adapter = adapter; this.storageRoot = storageRoot; this.promptBuilder = promptBuilder; this.busy = false;
@@ -61,6 +111,7 @@ export class ImageGenerationService {
         await rename(`${path}.tmp`, path);
         record.image = { assetId: record.id, storagePath: relative(PROJECT_ROOT,path).replaceAll("\\","/"), url: `/api/image-cards/${record.id}/image`, ...dimensions };
         record.status = "succeeded"; record.elapsedMs = Date.now() - started;
+        record.auditReport = buildAuditReport({ record, input, generated });
         await this.saveRecord(record);
       } catch (error) {
         const safe = controller.signal.aborted ? controller.signal.reason : error instanceof ImageCardError ? error : new ImageCardError("STORAGE_FAILED", "本地保存失败，请检查目录权限与可用空间。", 500);
@@ -68,6 +119,7 @@ export class ImageGenerationService {
         record.error = { code: safe.code, message: safe.message, ...safe.details };
         if (safe.details?.requestId) record.requestId = safe.details.requestId;
         if (record.requestId) record.error.requestId = record.requestId;
+        record.auditReport = buildAuditReport({ record, input, error: safe });
         delete record.image;
         await unlink(join(this.storageRoot, `${record.id}.png`)).catch(() => {});
         await this.saveRecord(record);

@@ -34,34 +34,63 @@ export class DashScopeAdapter {
       response = await this.fetcher(`${config.baseUrl}/api/v1/services/aigc/multimodal-generation/generation`, {
         method: "POST", redirect: "manual", signal,
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-        body: JSON.stringify({ model: config.model, input: { messages: [{ role: "user", content: requestContent }] },
-          parameters: { size: config.size, n: 1, ...(!config.model.startsWith('qwen-image-2.1-') ? {negative_prompt: prompt.negative} : {}), prompt_extend: false, watermark: false } })
+        body: JSON.stringify({
+          model: config.model,
+          input: { messages: [{ role: "user", content: requestContent }] },
+          parameters: {
+            size: config.size,
+            n: 1,
+            // 契约规定：DashScope 多模态生成 (qwen-image-2.1-turbo 及相关系列) 严禁传递 negative_prompt，所有禁止规则均在 positive prompt 中合并
+            prompt_extend: false,
+            watermark: false
+          }
+        })
       });
-    } catch { if (signal.aborted) throw signal.reason; throw new ImageCardError("NETWORK_ERROR", "无法连接百炼服务，请检查网络后手动重试。"); }
+    } catch {
+      if (signal.aborted) throw signal.reason;
+      const netErr = new ImageCardError("NETWORK_ERROR", "无法连接百炼服务，请检查网络后手动重试。");
+      netErr.details = { stage: "qwen_submitting" };
+      throw netErr;
+    }
+    const responseContentType = response.headers?.get?.("content-type") || "";
     let data;
     try { data = JSON.parse((await readBounded(response, 1024 * 1024)).toString("utf8")); }
-    catch { if (signal.aborted) throw signal.reason; if (!response.ok) throw providerError(response.status); throw new ImageCardError("PROVIDER_RESPONSE_INVALID", "生图服务返回了无法解析的数据。"); }
-    if (!data || typeof data !== "object" || Array.isArray(data)) throw new ImageCardError("PROVIDER_RESPONSE_INVALID", "生图服务返回的数据结构不正确。");
+    catch {
+      if (signal.aborted) throw signal.reason;
+      if (!response.ok) {
+        const pErr = providerError(response.status);
+        pErr.details = { httpStatus: response.status, contentType: responseContentType, stage: "qwen_generating" };
+        throw pErr;
+      }
+      throw new ImageCardError("PROVIDER_RESPONSE_INVALID", "生图服务返回了无法解析的数据。", 502, { httpStatus: response.status, contentType: responseContentType, stage: "qwen_generating" });
+    }
+    if (!data || typeof data !== "object" || Array.isArray(data)) throw new ImageCardError("PROVIDER_RESPONSE_INVALID", "生图服务返回的数据结构不正确。", 502, { httpStatus: response.status, contentType: responseContentType, stage: "qwen_generating" });
     const requestId = typeof data.request_id === "string" && /^[\w-]{1,160}$/.test(data.request_id) ? data.request_id : undefined;
     if (!response.ok || data.code) {
       const error = providerError(response.status, String(data.code || ""));
-      error.details = { requestId, providerCode: /^[\w.:-]{1,100}$/.test(data.code) ? data.code : undefined };
+      error.details = {
+        requestId,
+        providerCode: /^[\w.:-]{1,100}$/.test(data.code) ? data.code : undefined,
+        httpStatus: response.status,
+        contentType: responseContentType,
+        stage: "qwen_generating"
+      };
       throw error;
     }
     const content = data.output?.choices?.[0]?.message?.content;
     const image = Array.isArray(content) ? content.find(item => item && typeof item.image === "string")?.image : undefined;
-    let url; try { url = new URL(image); } catch { throw new ImageCardError("IMAGE_URL_MISSING", "生图服务未返回图片地址。", 502, { requestId }); }
+    let url; try { url = new URL(image); } catch { throw new ImageCardError("IMAGE_URL_MISSING", "生图服务未返回图片地址。", 502, { requestId, httpStatus: response.status, contentType: responseContentType, stage: "qwen_generating" }); }
     // Never follow arbitrary/private URLs or send the API credential to image hosts.
-    if (url.protocol !== "https:" || !/^[a-zA-Z0-9.-]+\.aliyuncs\.com$/.test(url.hostname) || url.username || url.password || url.port) throw new ImageCardError("IMAGE_URL_INVALID", "供应商返回了不受支持的图片地址。", 502, { requestId });
+    if (url.protocol !== "https:" || !/^[a-zA-Z0-9.-]+\.aliyuncs\.com$/.test(url.hostname) || url.username || url.password || url.port) throw new ImageCardError("IMAGE_URL_INVALID", "供应商返回了不受支持的图片地址。", 502, { requestId, httpStatus: response.status, stage: "image_downloading" });
     try {
       const download = await this.fetcher(url.href, { signal, redirect: "manual" });
-      if (!download.ok) throw new ImageCardError([403,404,410].includes(download.status) ? "IMAGE_URL_EXPIRED" : "IMAGE_DOWNLOAD_FAILED", "生成图片地址失效或下载失败；未保存成功，请手动重试。", 502, { requestId });
+      if (!download.ok) throw new ImageCardError([403,404,410].includes(download.status) ? "IMAGE_URL_EXPIRED" : "IMAGE_DOWNLOAD_FAILED", "生成图片地址失效或下载失败；未保存成功，请手动重试。", 502, { requestId, httpStatus: download.status, stage: "image_downloading" });
       const bytes = await readBounded(download, 20 * 1024 * 1024);
-      return { bytes, requestId };
+      return { bytes, requestId, httpStatus: response.status, contentType: responseContentType };
     } catch (error) {
-      if (signal.aborted) { signal.reason.details = { requestId }; throw signal.reason; }
+      if (signal.aborted) { signal.reason.details = { requestId, stage: "image_downloading" }; throw signal.reason; }
       if (error instanceof ImageCardError) throw error;
-      throw new ImageCardError("IMAGE_DOWNLOAD_FAILED", "图片下载失败，请检查网络。", 502, { requestId });
+      throw new ImageCardError("IMAGE_DOWNLOAD_FAILED", "图片下载失败，请检查网络。", 502, { requestId, stage: "image_downloading" });
     }
   }
 }

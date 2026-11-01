@@ -505,6 +505,17 @@ export const ArchivePlayground: React.FC<ArchivePlaygroundProps> = ({
                       <div className="review-meta">
                         审核状态：{c.review_status === 'approved' ? '✅ 人工审核通过' : '待审核'}
                       </div>
+                      {c.audit_report && (
+                        <details style={{ marginTop: '8px', fontSize: '11px', textAlign: 'left' }}>
+                          <summary style={{ cursor: 'pointer', color: '#385e2b', fontWeight: 600 }}>🔬 生成审计与 Prompt 拆解（{c.audit_report.total_prompt_chars} 字）</summary>
+                          <div style={{ background: '#f5f8f3', padding: '6px 8px', borderRadius: '6px', marginTop: '4px' }}>
+                            <div><strong>阶段：</strong>{c.audit_report.stage} · <strong>状态码：</strong>{c.audit_report.http_meta?.status_code || 200}</div>
+                            {c.audit_report.request_id && <div><strong>百炼 Request ID：</strong><code>{c.audit_report.request_id}</code></div>}
+                            <div><strong>Prompt 段长：</strong>场景 {c.audit_report.prompt_segments?.scene_content || 0} / 结构 {c.audit_report.prompt_segments?.structure_rules || 0} / 尺度 {c.audit_report.prompt_segments?.scale_rules || 0} / 风格 {c.audit_report.prompt_segments?.style_package || 0} / 透明 {c.audit_report.prompt_segments?.transparency_rules || 0}</div>
+                            <div><strong>请求体度量：</strong>参考图 {c.audit_report.images_meta?.count || 0} 张 · 预估大小 {Math.round((c.audit_report.images_meta?.estimated_request_payload_bytes || 0) / 1024)} KB</div>
+                          </div>
+                        </details>
+                      )}
                     </div>
                   ))}
                 </div>

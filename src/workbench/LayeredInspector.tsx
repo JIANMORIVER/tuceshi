@@ -1,9 +1,10 @@
 import React from 'react';
 import {
   PRESET_STYLE_PACKAGES,
+  DEFAULT_STRUCTURE_RULES,
+  DEFAULT_SCALE_RULES,
   DEFAULT_GROUND_RULES,
-  assembleLayeredPositivePrompt,
-  assembleLayeredNegativePrompt,
+  breakdownPromptSegments,
   REFERENCE_ROLE_LABELS
 } from '../domain/experiment-rules.js';
 import type { LabConfig, Candidate, Experiment } from './flow.js';
@@ -25,22 +26,22 @@ export const LayeredInspector: React.FC<LayeredInspectorProps> = ({
   const sceneDescription = activeCandidate?.plan.scene_description || '（完成日记与构图规划后生成具体描述）';
   const primarySubject = activeCandidate?.plan.primary_subject || '（未锁定）';
 
-  const previewPositive = assembleLayeredPositivePrompt({
+  const breakdown = breakdownPromptSegments({
     sceneDescription: activeCandidate?.plan.scene_description || '示例构图描述',
     primarySubject: activeCandidate?.plan.primary_subject,
     groundSurfaceName: activeCandidate?.plan.terrain?.name,
     customStyleText: styleText,
-    groundRules: DEFAULT_GROUND_RULES,
+    structureRules: DEFAULT_STRUCTURE_RULES,
+    scaleRules: DEFAULT_SCALE_RULES,
     isNativeAlpha: experiment.pipeline.route === 'native-alpha',
     mode: lab.mode,
     referenceImages: lab.referenceImages,
-    i2iRules: lab.i2iRules
+    i2iRules: lab.i2iRules,
+    customNegativeText: negativeText
   });
 
-  const previewNegative = assembleLayeredNegativePrompt({
-    customNegativeText: negativeText,
-    mode: lab.mode
-  });
+  const previewPositive = breakdown.positivePrompt;
+  const previewNegative = breakdown.negativePrompt;
 
   return (
     <section className="paper inspector-section" aria-label="生成链路分层可干预检查器">
@@ -178,9 +179,23 @@ export const LayeredInspector: React.FC<LayeredInspectorProps> = ({
               <strong>作用：</strong>所有前序层级在后端合成后的最终 Prompt 呈现，即千问生图真正消费的文本。
             </p>
             <div className="layer-content-box">
+              <div className="prompt-meta-bar" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                <span className="badge-pill" style={{ background: '#2f4e27', color: '#fff' }}>
+                  总字符数：{breakdown.totalChars} 字
+                </span>
+                <span className="badge-pill">场景内容：{breakdown.segments.scene_content} 字</span>
+                <span className="badge-pill">结构规则：{breakdown.segments.structure_rules} 字</span>
+                <span className="badge-pill">尺度规则：{breakdown.segments.scale_rules} 字</span>
+                <span className="badge-pill">风格包：{breakdown.segments.style_package} 字</span>
+                <span className="badge-pill">透明背景：{breakdown.segments.transparency_rules} 字</span>
+                {breakdown.segments.i2i_reference_rules > 0 && (
+                  <span className="badge-pill badge-i2i">参考图规则：{breakdown.segments.i2i_reference_rules} 字</span>
+                )}
+                <span className="badge-pill">禁止规则：{breakdown.segments.negative_prohibitions} 字</span>
+              </div>
               <strong>最终正向提示词 (Positive Prompt)：</strong>
               <pre className="prompt-pre">{previewPositive}</pre>
-              <strong>最终负向提示词 (Negative Prompt)：</strong>
+              <strong>最终负向提示词 (Negative Prompt，已合并至正向中)：</strong>
               <pre className="prompt-pre">{previewNegative}</pre>
             </div>
           </div>

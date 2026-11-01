@@ -65,9 +65,57 @@ function App(){
     <details><summary>构图与完整提示词</summary>
      <p><strong>场景构图描述：</strong>{candidate.plan.scene_description}</p>
      <pre>{candidate.job?.submitted_prompt?.positive_prompt||'尚未收到生图提示词'}</pre>
-     <p><strong>负向词：</strong>{candidate.job?.submitted_prompt?.negative_prompt||'无'}</p>
+     <p><strong>负向词（已并入正向）：</strong>{candidate.job?.submitted_prompt?.negative_prompt||'无'}</p>
      <small>请求ID：{candidate.submissionId}</small>
     </details>
+
+    {candidate.job?.audit_report && (
+      <details className="audit-report-details" open={Boolean(candidate.error || candidate.job?.error_message)}>
+       <summary>🔬 实验生成审计与诊断报告 {candidate.job.audit_report.stage==='completed'?'✅':'⚠️'}</summary>
+       <div className="audit-report-content">
+        <div className="audit-grid">
+         <div><strong>执行阶段：</strong><span className="badge-pill">{candidate.job.audit_report.stage}</span></div>
+         <div><strong>HTTP 状态：</strong><span>{candidate.job.audit_report.http_meta?.status_code || 200}</span></div>
+         <div><strong>Content-Type：</strong><span>{candidate.job.audit_report.http_meta?.content_type || 'application/json'}</span></div>
+         {candidate.job.audit_report.request_id && <div><strong>百炼 Request ID：</strong><code>{candidate.job.audit_report.request_id}</code></div>}
+         {candidate.job.audit_report.provider_raw_error_code && <div><strong>千问原始错误码：</strong><code className="error-code">{candidate.job.audit_report.provider_raw_error_code}</code></div>}
+         {candidate.job.audit_report.backend_error_code && <div><strong>后端错误码：</strong><code>{candidate.job.audit_report.backend_error_code}</code></div>}
+        </div>
+
+        <div className="audit-section-block">
+         <strong>Prompt 长度与各段拆解（总字符数：{candidate.job.audit_report.total_prompt_chars} 字）：</strong>
+         <div className="audit-segments-tags">
+          <span>场景内容：{candidate.job.audit_report.prompt_segments?.scene_content || 0} 字</span>
+          <span>结构规则：{candidate.job.audit_report.prompt_segments?.structure_rules || 0} 字</span>
+          <span>尺度规则：{candidate.job.audit_report.prompt_segments?.scale_rules || 0} 字</span>
+          <span>风格包：{candidate.job.audit_report.prompt_segments?.style_package || 0} 字</span>
+          <span>透明背景：{candidate.job.audit_report.prompt_segments?.transparency_rules || 0} 字</span>
+          {Boolean(candidate.job.audit_report.prompt_segments?.i2i_reference_rules) && <span>参考图指导：{candidate.job.audit_report.prompt_segments.i2i_reference_rules} 字</span>}
+          <span>禁止约束：{candidate.job.audit_report.prompt_segments?.negative_prohibitions || 0} 字</span>
+         </div>
+        </div>
+
+        <div className="audit-section-block">
+         <strong>请求体与输入参考图（脱敏度量，绝无 Base64）：</strong>
+         <div>参考图数量：{candidate.job.audit_report.images_meta?.count || 0} 张 · 预估请求体大小：{Math.round((candidate.job.audit_report.images_meta?.estimated_request_payload_bytes || 0) / 1024)} KB</div>
+         {candidate.job.audit_report.images_meta?.details?.length > 0 && (
+          <ul className="audit-image-list">
+           {candidate.job.audit_report.images_meta.details.map((img, idx) => (
+            <li key={img.id || idx}>
+             图 {idx + 1}：{img.name}（角色：{REFERENCE_ROLE_LABELS[img.role as keyof typeof REFERENCE_ROLE_LABELS]?.label || img.role}）· 大小：{Math.round((img.size_bytes || 0) / 1024)} KB
+            </li>
+           ))}
+          </ul>
+         )}
+        </div>
+
+        <details className="audit-prompt-full">
+         <summary>查看发送至千问的最终 Prompt 全文（{candidate.job.audit_report.total_prompt_chars} 字符）</summary>
+         <pre className="prompt-pre">{candidate.job.audit_report.final_prompt}</pre>
+        </details>
+       </div>
+      </details>
+    )}
 
     {candidate.job?.original_image_url&&<details><summary>原图与透明图对比</summary><div className="comparison"><figure><figcaption>原图保留</figcaption><img src={candidate.job.original_image_url} alt="原始生成图片"/><a href={candidate.job.original_image_url} download={`${candidate.id}-original.png`}>下载原图</a></figure><figure><figcaption>透明结果</figcaption>{candidate.job.image_url&&<div className="checker"><img src={candidate.job.image_url} alt="透明结果"/></div>}{candidate.job.image_url&&<a href={candidate.job.image_url} download={`${candidate.id}-transparent.png`}>下载透明图</a>}</figure></div></details>}
     {images[candidate.id]?.failed&&images[candidate.id]?.url===candidate.job?.image_url&&<p role="alert">图片未加载，暂不能选择。<button onClick={()=>setImages(old=>({...old,[candidate.id]:{...old[candidate.id],failed:false,reload:(old[candidate.id]?.reload||0)+1}}))}>重新加载图片</button></p>}
@@ -94,7 +142,7 @@ function App(){
   <main>
    <header className="top">
     <div>
-     <p className="eyebrow">LIFE MAP · STANDALONE V0.4.0</p>
+     <p className="eyebrow">LIFE MAP · STANDALONE V0.4.1</p>
      <h1>生图控制与实验工作台</h1>
      <p>文生图 · 图生图 · 风格包迁移 · 分层干预 · 实验档案馆</p>
     </div>

@@ -193,3 +193,18 @@
 .custom-pill{background:#e0edf5;color:#23577a;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
 .delete-style-btn{min-height:22px;min-width:22px;padding:0;line-height:20px;border-radius:50%;border:1px solid #ddd;background:#fff;color:#888;cursor:pointer;font-size:14px}
 .delete-style-btn:hover{color:#b3261e;border-color:#b3261e;background:#fee}
+
+/* 实验生成审计与诊断报告样式 */
+.audit-report-details{margin-top:12px;background:#f9fbf8;border:1px solid #dbe6d5;border-radius:10px;padding:8px 12px;font-size:12px}
+.audit-report-details summary{font-weight:600;color:#2c4b24;cursor:pointer;user-select:none;outline:none}
+.audit-report-content{margin-top:10px;display:flex;flex-direction:column;gap:10px}
+.audit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;background:#fff;padding:10px 12px;border-radius:8px;border:1px solid #e7efe3}
+.audit-grid code{background:#f0f4ee;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:11px}
+.audit-grid .error-code{color:#b3261e;background:#fee}
+.audit-section-block{background:#fff;padding:10px 12px;border-radius:8px;border:1px solid #e7efe3}
+.audit-segments-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.audit-segments-tags span{background:#f1f5ee;padding:3px 8px;border-radius:6px;font-size:11px;color:#395431;border:1px solid #dce6d8}
+.audit-image-list{margin:6px 0 0 16px;padding:0;font-size:11px;color:#555}
+.audit-prompt-full{margin-top:6px}
+.audit-prompt-full summary{font-size:11px;color:#4a6b3f}
+.audit-prompt-full pre{max-height:200px;overflow-y:auto;background:#282c34;color:#abb2bf;padding:10px;border-radius:6px;font-size:11px;margin-top:6px;white-space:pre-wrap;word-break:break-all}

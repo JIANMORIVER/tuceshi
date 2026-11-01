@@ -1,20 +1,26 @@
 export const DEFAULT_STYLE = '温柔、清爽、精致的纯 2D 像素画。像素簇和边缘清晰，统一约 128×128 逻辑像素的细节密度，低饱和自然配色。固定从东南方向俯看约 30 度的等距视角，左上方柔和日光。';
-export const DEFAULT_GROUND_RULES = '统一地表与底座规范（优先于场景中关于厚底座或高台的描述）：整个场景只有一个正方形等距菱形地块，地表投影宽高约 1.68:1；地表占画布宽约 83%，地表菱形中心位于画布宽 50%、高 55.3% 附近，不能用建筑外轮廓或土层底端代替地表中心。底座仅为薄而清晰的等厚侧边，屏幕竖直厚度约为地表宽度的 3%，左右两侧厚度一致，底座下缘与对应的地表边缘平行；不画厚重土壤剖面、层层堆土、锥形悬浮岛或不规则岩柱。地表外轮廓是四条笔直边与四个平整角，不画翘边、卷边、翻折、碗状凹陷或向上弯曲的底板，不能通过扭曲外边缘表现透视。地表外边界的四个角与四条边保持同一基准面，并在边缘保留一圈窄的平缓衔接带，供相邻地块拼接。山地、丘陵、坡面或不平整地形可以在地块内部高于这一基准面，保留真实起伏和生活主景，不通过加厚底座表现海拔；不要把所有内部地形压平。完整保留建筑、树木、人物、道路及场景细节，不裁断主体，不重复叠加第二层底座。';
+export const DEFAULT_STRUCTURE_RULES = '整个场景为一个正方形 2.5D 等距菱形地块，地表投影宽高约 1.68:1，四角笔直平整无翘边；外边缘保留窄平衔接带并带有相邻地块的道路连接口；底座为等厚清晰侧边，厚度约地表宽度的 3%，左右一致，无层叠堆土或锥形悬浮岛。';
+export const DEFAULT_SCALE_RULES = '物体与建筑保持等距像素插画的标准比例尺，房屋、树木、生活物件与人物相对大小自然协调，符合微观生活箱景比例，主体与配景层次分明。';
+export const DEFAULT_GROUND_RULES = `${DEFAULT_STRUCTURE_RULES} ${DEFAULT_SCALE_RULES}`;
 export const DEFAULT_NEGATIVE = '顶视平面 tilemap，拼装图集，棋盘格背景，3D 写实，黏土，低多边形模型，模糊像素滤镜，过度装饰，密集建筑，文字，日期，水印，卡框，资源图标，宣传海报，裁断主体';
 
-export type ReferenceImageRole = 'structure' | 'style' | 'content';
+export type ReferenceImageRole = 'structure' | 'scale' | 'style' | 'content';
 
 export const REFERENCE_ROLE_LABELS: Record<ReferenceImageRole, { label: string; desc: string }> = {
   structure: {
-    label: '底图 / 结构图',
-    desc: '规定基本构图、地块形状、道路走向、主体位置与视角'
+    label: '结构底图 (structure)',
+    desc: '决定地块形状、外轮廓与相邻地块连接口走向'
+  },
+  scale: {
+    label: '尺度参考图 (scale)',
+    desc: '只提供物体相对大小与比例参考，严格不影响画风与色彩'
   },
   style: {
-    label: '风格参考图',
+    label: '风格参考图 (style)',
     desc: '规定颜色、材质、像素感、氛围与细节密度'
   },
   content: {
-    label: '内容参考图',
+    label: '内容参考图 (content)',
     desc: '指定某种物件、建筑或场景元素的视觉参考'
   }
 };
@@ -35,9 +41,9 @@ export interface ImageToImageRules {
 }
 
 export const DEFAULT_I2I_RULES: ImageToImageRules = {
-  roleInstructions: '底图(structure)提供整体地块菱形轮廓与主体大致方位；风格图(style)提供色彩搭配与像素质感；内容图(content)提供物件与建筑造型参考。',
-  preservationRules: '保留约30度等距俯视视角；保留地块中心基准面；保留薄而等厚的底座侧边；保留边缘无翘边平整闭合。',
-  variationRules: '根据日记内容调整主体细节与配饰；根据风格包调整色彩明暗与冷暖；允许微调植被与道路转角细节，不逐像素死板复制。',
+  roleInstructions: '结构图(structure)决定地块外形轮廓与连接口走向；尺度图(scale)只提供物体相对大小与比例参考，严格不影响画风；风格图(style)提供色彩与像素感；内容图(content)提供物件与建筑造型。',
+  preservationRules: '严格保留约30度等距俯视视角、地表基准面、薄而等厚底座侧边，以及边缘平整闭合。',
+  variationRules: '根据日记内容调整主体细节与生活配景，允许微调植被与道路转角细节，不逐像素生硬复制。',
   prohibitions: '严禁将参考图中的文字、UI、框线、水印或黑白棋盘格复制到输出中；不要破坏边缘平直轮廓；不要将主体裁断在画布外。'
 };
 
@@ -141,6 +147,44 @@ export interface LayeredInterventionView {
   };
 }
 
+export interface PromptBreakdownResult {
+  positivePrompt: string;
+  negativePrompt: string;
+  totalChars: number;
+  segments: {
+    scene_content: number;
+    structure_rules: number;
+    scale_rules: number;
+    style_package: number;
+    transparency_rules: number;
+    i2i_reference_rules: number;
+    negative_prohibitions: number;
+  };
+}
+
+export function buildI2IRoleGuidance(referenceImages?: ReferenceImage[]): string {
+  if (!referenceImages || referenceImages.length === 0) return '';
+  const lines: string[] = [];
+  const hasStructure = referenceImages.some(img => img.role === 'structure');
+  const hasScale = referenceImages.some(img => img.role === 'scale');
+  const hasStyle = referenceImages.some(img => img.role === 'style');
+  const hasContent = referenceImages.some(img => img.role === 'content');
+
+  if (hasStructure) {
+    lines.push('【结构图规则】：决定地块正方形等距菱形轮廓与道路连接口走向，严禁复制参考图内的具体纹理或UI。');
+  }
+  if (hasScale) {
+    lines.push('【尺度图规则】：仅作为建筑、物体与角色的相对大小和比例尺参考，严格禁止借用其画风、材质或色彩，不改变画面风格。');
+  }
+  if (hasStyle) {
+    lines.push('【风格图规则】：提供像素质感、色彩基调与光影氛围参考。');
+  }
+  if (hasContent) {
+    lines.push('【内容图规则】：提供特定建筑或生活物品的视觉造型参考。');
+  }
+  return lines.join('\n');
+}
+
 export function assembleLayeredPositivePrompt(options: {
   sceneDescription: string;
   primarySubject?: string;
@@ -153,57 +197,101 @@ export function assembleLayeredPositivePrompt(options: {
   referenceImages?: ReferenceImage[];
   i2iRules?: ImageToImageRules;
 }): string {
+  return breakdownPromptSegments(options).positivePrompt;
+}
+
+export function breakdownPromptSegments(options: {
+  sceneDescription: string;
+  primarySubject?: string;
+  groundSurfaceName?: string;
+  stylePackage?: StylePackage;
+  customStyleText?: string;
+  structureRules?: string;
+  scaleRules?: string;
+  groundRules?: string;
+  isNativeAlpha?: boolean;
+  mode?: 'text_to_image' | 'image_to_image';
+  referenceImages?: ReferenceImage[];
+  i2iRules?: ImageToImageRules;
+  customNegativeText?: string;
+}): PromptBreakdownResult {
   const styleText = options.customStyleText?.trim() || options.stylePackage?.style_text_rules?.trim() || DEFAULT_STYLE;
-  const groundText = options.groundRules?.trim() || DEFAULT_GROUND_RULES;
+  const structureText = options.structureRules?.trim() || DEFAULT_STRUCTURE_RULES;
+  const scaleText = options.scaleRules?.trim() || DEFAULT_SCALE_RULES;
   const visualDesc = options.isNativeAlpha
     ? options.sceneDescription.replace(/纯白外背景|纯白背景|外部纯白|白色背景/g, '透明外背景')
     : options.sceneDescription;
 
-  const parts: string[] = [];
-
-  if (options.isNativeAlpha) {
-    parts.push('This is an RGBA image with transparency.');
-  }
-
   // 1. 风格层
-  parts.push(`【画风与氛围规范】\n${styleText}`);
+  const styleClause = `【画风与氛围规范】\n${styleText}`;
 
   // 2. 场景主体层
   let subjectClause = '';
   if (options.primarySubject?.trim()) {
-    subjectClause = `画面中必须清楚呈现${options.primarySubject.trim()}。主景占据主要视觉面积，不能只画空白草地。\n`;
+    subjectClause = `画面中必须清楚呈现${options.primarySubject.trim()}。主景占据主要视觉面积，不能只画空白地面。\n`;
   }
   const surfaceClause = options.groundSurfaceName ? `地面材质为${options.groundSurfaceName}。\n` : '';
-  parts.push(`【场景生活构图】\n${subjectClause}${visualDesc}\n${surfaceClause}`.trim());
+  const sceneClause = `【场景生活构图】\n${subjectClause}${visualDesc}\n${surfaceClause}`.trim();
 
-  // 3. 空间与地块几何层
-  if (options.isNativeAlpha) {
-    parts.push(
-      `【等距地块与透明要求】\n主景、建筑、树木、人物、地面、道路及整个菱形底座全部保留，组成一个完整场景。底座和内部场景不透明，只有整个地块外部透明。\n${groundText}\n地块外不画白底、彩色底、棋盘格、投影或天空。`
-    );
-  } else {
-    parts.push(
-      `【等距地块与外背景规范】\n${groundText}\n地块外为均匀 RGB(255,255,255) 纯白背景，无投影、渐变或棋盘格。只画插画；任何位置都不要文字、字母、数字、日记、标题、标签、水印或说明卡片。屏幕和便签仅用无字色块表达。`
-    );
-  }
+  // 3. 结构规则（决定地块形状和连接口）
+  const structureClause = `【结构与地块几何】\n${structureText}`;
 
-  // 4. 图生图与参考图层
+  // 4. 尺度规则（物体相对大小，不影响画风）
+  const scaleClause = `【物体尺度与比例】\n${scaleText}`;
+
+  // 5. 透明背景与外轮廓
+  const transparencyClause = options.isNativeAlpha
+    ? '【背景透明规范】\nThis is an RGBA image with transparency. 整块地块主体、底座与内部生活场景全部保留且不透明，仅地块外部完全透明，无白底、黑底、彩色底、棋盘格、天空或投影。'
+    : '【外背景规范】\n地块外为均匀 RGB(255,255,255) 纯白背景，无投影、渐变或棋盘格。';
+
+  // 6. 图生图与参考图层（区分 structure 和 scale）
+  let i2iClause = '';
   if (options.mode === 'image_to_image' && options.referenceImages && options.referenceImages.length > 0) {
+    const roleGuidance = buildI2IRoleGuidance(options.referenceImages);
     const rules = options.i2iRules || DEFAULT_I2I_RULES;
     const imageListDesc = options.referenceImages
-      .map((img, i) => `参考图${i + 1}（${REFERENCE_ROLE_LABELS[img.role].label}）：${img.name}`)
+      .map((img, i) => `图${i + 1}（${REFERENCE_ROLE_LABELS[img.role].label}）：${img.name}`)
       .join('；');
 
-    parts.push(
-      `【多参考图协同指导】\n本次包含 ${options.referenceImages.length} 张参考图（${imageListDesc}）。\n- 角色指导：${rules.roleInstructions}\n- 严格保留：${rules.preservationRules}\n- 允许重构：${rules.variationRules}\n- 禁止事项：${rules.prohibitions}`
-    );
+    i2iClause = `【参考图指导】包含 ${options.referenceImages.length} 张参考图（${imageListDesc}）。\n${roleGuidance}\n- 协同说明：${rules.roleInstructions}\n- 严格保留：${rules.preservationRules}\n- 允许重构：${rules.variationRules}\n- 禁止事项：${rules.prohibitions}`;
   }
 
-  if (options.isNativeAlpha) {
-    parts.push('The image has alpha channel and the background is transparent.');
-  }
+  // 7. 负向规则（统一合并进正向 Prompt）
+  const negativeText = assembleLayeredNegativePrompt({
+    customNegativeText: options.customNegativeText,
+    stylePackage: options.stylePackage,
+    mode: options.mode
+  });
+  const negativeClause = `避免：${negativeText}。只画插画，任何位置都不要文字、字母、数字、日记、标题、标签、水印或说明卡片。`;
 
-  return parts.join('\n\n');
+  const positiveParts = [
+    options.isNativeAlpha ? 'This is an RGBA image with transparency.' : '',
+    styleClause,
+    sceneClause,
+    structureClause,
+    scaleClause,
+    transparencyClause,
+    i2iClause,
+    negativeClause,
+    options.isNativeAlpha ? 'The image has alpha channel and the background is transparent.' : ''
+  ].filter(Boolean);
+
+  const finalPositive = positiveParts.join('\n\n');
+
+  return {
+    positivePrompt: finalPositive,
+    negativePrompt: negativeText,
+    totalChars: finalPositive.length,
+    segments: {
+      scene_content: sceneClause.length,
+      structure_rules: structureClause.length,
+      scale_rules: scaleClause.length,
+      style_package: styleClause.length,
+      transparency_rules: transparencyClause.length,
+      i2i_reference_rules: i2iClause.length,
+      negative_prohibitions: negativeClause.length
+    }
+  };
 }
 
 export function assembleLayeredNegativePrompt(options: {
