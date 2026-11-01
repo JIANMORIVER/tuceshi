@@ -139,6 +139,22 @@ export class ArchiveService {
     for (const c of run.candidates || []) {
       const tryAdd = async (url, suffix) => {
         if (!url) return;
+        if (url.startsWith('data:image/png;base64,')) {
+          const b64 = url.slice('data:image/png;base64,'.length);
+          zipFiles.push({ name: `images/${c.id}-${suffix}.png`, data: Buffer.from(b64, 'base64') });
+          return;
+        }
+        const assetMatch = url.match(/\/api\/archive\/assets\/([a-zA-Z0-9_.-]+)/);
+        if (assetMatch) {
+          const localPath = join(this.assetsDir, assetMatch[1]);
+          if (existsSync(localPath)) {
+            try {
+              const bytes = await readFile(localPath);
+              zipFiles.push({ name: `images/${c.id}-${suffix}.png`, data: bytes });
+              return;
+            } catch {}
+          }
+        }
         const idMatch = url.match(/\/api\/terrain-images\/([a-f0-9-]+)/) || url.match(/\/api\/terrain-cutouts\/([a-f0-9-]+)/);
         if (idMatch) {
           const imgId = idMatch[1];
@@ -176,12 +192,24 @@ export class ArchiveService {
       throw new Error('ZIP 档案数据结构不完整');
     }
 
-    // 保存内部图片资产
+    // 保存内部图片资产并回填到 candidates
     for (const file of files) {
       if (file.name.startsWith('images/')) {
         const basename = file.name.slice('images/'.length);
         const assetId = `imported-${runData.experiment_id}-${basename}`;
         await this.saveAsset(assetId, file.data);
+
+        const nameWithoutExt = basename.replace(/\.png$/i, '');
+        const lastDash = nameWithoutExt.lastIndexOf('-');
+        if (lastDash > 0) {
+          const candidateId = nameWithoutExt.slice(0, lastDash);
+          const suffix = nameWithoutExt.slice(lastDash + 1);
+          const c = runData.candidates.find(item => item.id === candidateId);
+          if (c) {
+            if (suffix === 'original') c.original_image_url = `/api/archive/assets/${assetId}`;
+            if (suffix === 'transparent') c.image_url = `/api/archive/assets/${assetId}`;
+          }
+        }
       }
     }
 

@@ -45,27 +45,66 @@ export const ArchivePlayground: React.FC<ArchivePlaygroundProps> = ({
     void loadRuns();
   }, [filterMode, filterStatus, filterStyle]);
 
-  const handleImportZip = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const importZipFiles = async (files: File[]) => {
+    if (!files.length) return;
     setLoading(true);
     setError('');
-    setActionNotice('');
+    setActionNotice(`正在导入 ${files.length} 个实验档案 ZIP...`);
+    let successCount = 0;
+    let failCount = 0;
+    for (const file of files) {
+      try {
+        const res = await fetch('/api/archive/import-zip', {
+          method: 'POST',
+          headers: { 'content-type': 'application/zip' },
+          body: file
+        });
+        if (res.ok) successCount++;
+        else failCount++;
+      } catch {
+        failCount++;
+      }
+    }
+    setActionNotice(`同步完成：已成功导入 ${successCount} 个实验档案${failCount > 0 ? `，失败 ${failCount} 个` : ''}！`);
+    await loadRuns();
+    setLoading(false);
+  };
+
+  const handleImportZipInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+    const files: File[] = [];
+    for (let i = 0; i < fileList.length; i++) {
+      files.push(fileList[i]);
+    }
+    await importZipFiles(files);
+    e.target.value = '';
+  };
+
+  const handlePickDirectory = async () => {
+    if (typeof window === 'undefined' || !('showDirectoryPicker' in window)) {
+      alert('当前浏览器环境未开放直接选择文件夹 API，请使用右侧【📥 批量导入 ZIP】按钮，支持直接框选多个 ZIP 文件一次性导入！');
+      return;
+    }
     try {
-      const res = await fetch('/api/archive/import-zip', {
-        method: 'POST',
-        headers: { 'content-type': 'application/zip' },
-        body: file
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'ZIP 导入失败');
-      setActionNotice(`已成功还原历史实验档案：${result.run?.experiment_id || ''}`);
-      await loadRuns();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'ZIP 导入失败');
-    } finally {
-      setLoading(false);
-      e.target.value = '';
+      const dirHandle = await (window as any).showDirectoryPicker();
+      const zipFiles: File[] = [];
+      for await (const entry of dirHandle.values()) {
+        if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.zip')) {
+          const file = await entry.getFile();
+          zipFiles.push(file);
+        }
+      }
+      if (zipFiles.length === 0) {
+        setActionNotice(`文件夹【${dirHandle.name}】中未找到 .zip 归档文件。请将导出的实验 zip 放入该目录后重试。`);
+        return;
+      }
+      setActionNotice(`在文件夹【${dirHandle.name}】中发现 ${zipFiles.length} 个实验归档包，开始同步...`);
+      await importZipFiles(zipFiles);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setError(err.message || '读取文件夹失败');
+      }
     }
   };
 
@@ -108,17 +147,52 @@ export const ArchivePlayground: React.FC<ArchivePlaygroundProps> = ({
   const selectedRun = runs.find(r => r.experiment_id === selectedRunId);
   const compareRuns = compareIds.map(id => runs.find(r => r.experiment_id === id)).filter(Boolean);
 
+  const handleDropFiles = async (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
+    const zipFiles: File[] = [];
+    for (let i = 0; i < e.dataTransfer.files.length; i++) {
+      const file = e.dataTransfer.files[i];
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        zipFiles.push(file);
+      }
+    }
+    if (zipFiles.length > 0) {
+      await importZipFiles(zipFiles);
+    }
+  };
+
   return (
-    <section className="paper archive-playground" aria-label="本地实验档案馆">
+    <section
+      className="paper archive-playground"
+      aria-label="本地实验档案馆"
+      onDragOver={e => e.preventDefault()}
+      onDrop={handleDropFiles}
+    >
       <div className="section-title">
         <div>
           <h2>🏛️ 本地实验档案馆</h2>
           <span className="badge">历史实验持久化与跨版本对比</span>
         </div>
         <div className="archive-actions">
-          <label className="button secondary file-upload-btn">
-            📥 导入实验 ZIP
-            <input type="file" accept=".zip" onChange={handleImportZip} style={{ display: 'none' }} />
+          <button
+            type="button"
+            className="button secondary"
+            onClick={handlePickDirectory}
+            disabled={loading}
+            title="选择本地存放实验 ZIP 的文件夹，一键扫描并载入全部历史实验"
+          >
+            📁 关联本地 ZIP 文件夹
+          </button>
+          <label className="button secondary file-upload-btn" title="支持同时框选多个 ZIP 归档文件导入">
+            📥 批量导入 ZIP
+            <input
+              type="file"
+              accept=".zip"
+              multiple
+              onChange={handleImportZipInput}
+              style={{ display: 'none' }}
+            />
           </label>
           <button className="button secondary" onClick={() => loadRuns()} disabled={loading}>
             🔄 刷新列表
@@ -126,9 +200,9 @@ export const ArchivePlayground: React.FC<ArchivePlaygroundProps> = ({
         </div>
       </div>
 
-      <p className="hint">
-        所有提交的生图记录均以原子方式写入本地存储，不随刷新丢失。可完整还原历史输入、Prompt 和参考图，并支持 A/B 差异比对。
-      </p>
+      <div className="archive-db-banner">
+        <span>💡 <strong>本地持久化机制</strong>：每次生图提交均已自动原子写入本地磁盘（<code>.local/experiment-archive/</code>）。你也可以将每次下载的 ZIP 统一归纳在任意本地文件夹中，点击【📁 关联本地 ZIP 文件夹】或直接将多个 ZIP 拖入本界面，即可随时全量同步并还原图片与规则！</span>
+      </div>
 
       {actionNotice && <div className="toast success">{actionNotice}</div>}
       {error && <div className="toast error">{error}</div>}

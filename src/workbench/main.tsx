@@ -27,6 +27,7 @@ function App(){
  const e=flow.state,run=(action:()=>void|Promise<void>)=>{setUiError('');try{const result=action();if(result)void result.catch(error=>setUiError(error.message));}catch(error){setUiError(error instanceof Error?error.message:'操作失败');}};
  const update=(patch:Parameters<Workbench['edit']>[0])=>run(()=>flow.edit(patch));
  const exportData=()=>{const blob=new Blob([flow.export()],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`life-map-experiment-${e.id}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+ const exportZip=async()=>{try{await flow.syncToArchive();window.open(`/api/archive/runs/${e.id}/export-zip`,'_blank');}catch(err){setUiError('导出 ZIP 档案失败，请稍后重试。');}};
 
  const activeCandidate = e.candidates.find(c => c.id === (e.lab.frozenCandidateId || e.selectedId || 'candidate_1')) || e.candidates[0];
  const currentStyle = PRESET_STYLE_PACKAGES.find(s=>s.style_id===e.lab.selectedStyleId);
@@ -262,8 +263,21 @@ function App(){
 
      {(e.stage==='results'||e.stage==='selected')&&<>
       <section className="result-heading">
-       <h2>{e.stage==='selected'?'本次结果已选择':'选择你喜欢的今日制图'}</h2>
-       <p>{e.provider==='mock'?'当前是离线模拟，图片仅用于验证链路。':'当前批次已固定。查询原任务不会重新生图，待审核结果由你决定。'}</p>
+       <div className="section-title">
+        <div>
+         <h2>{e.stage==='selected'?'本次结果已选择':'选择你喜欢的今日制图'}</h2>
+         <p>{e.provider==='mock'?'当前是离线模拟，图片仅用于验证链路。':'当前批次已固定。查询原任务不会重新生图，待审核结果由你决定。'}</p>
+        </div>
+        <button
+         type="button"
+         className="button primary export-zip-btn"
+         disabled={flow.busy||!e.candidates.some(c=>c.job)}
+         onClick={exportZip}
+         title="一键打包本轮实验的完整输入、Prompt、双方案原图与透明图"
+        >
+         📦 导出本轮实验 ZIP 档案
+        </button>
+       </div>
       </section>
 
       {/* 冻结对照实验操作横幅 */}
@@ -292,6 +306,7 @@ function App(){
    )}
 
    <footer>
+    <button disabled={flow.busy||!e.candidates.some(c=>c.job)} onClick={exportZip}>📦 导出实验 ZIP</button>
     <button disabled={flow.busy} onClick={exportData}>导出实验 JSON</button>
     <button disabled={flow.busy} onClick={()=>{if(confirm('新建独立实验？本次记录将替换本机工作台草稿，请先导出需要保留的记录。新实验只有在你提交后才调用模型。'))run(()=>flow.reset());}}>新建实验</button>
     <small>模型密钥仅在独立服务进程中保存，不在实验JSON或浏览器缓存内。</small>

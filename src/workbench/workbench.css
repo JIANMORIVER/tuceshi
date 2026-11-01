@@ -175,3 +175,7 @@
   .modal-footer .btn-group{width:100%}
   .modal-footer .btn-group button{flex:1}
 }
+
+.archive-db-banner{background:#f1f6ed;border:1px solid #d3e4cb;border-radius:12px;padding:12px 16px;margin-bottom:18px;font-size:12px;color:#35532d;line-height:1.6}
+.archive-db-banner code{background:#e3edd9;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:11px}
+.export-zip-btn{margin-left:auto;white-space:nowrap}
