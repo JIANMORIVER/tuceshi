@@ -7,19 +7,33 @@ const context=await browser.newContext({viewport:{width:390,height:844},isMobile
 const shot=name=>page.screenshot({path:`${out}/${name}.png`,fullPage:true});
 try{
  await page.goto(base,{waitUntil:'networkidle'});await page.getByText('离线规则 · 零模型调用',{exact:true}).waitFor();check('standalone opens in offline mode',true);check('has no formal map or navigation',await page.locator('.bottom-nav,canvas').count()===0);
+ check('import diary snapshot button exists', await page.getByText('📥 导入日记输入 JSON').count() === 1);
+ check('archive tab exists', await page.getByRole('button', { name: '🏛️ 实验档案馆' }).count() === 1);
  await page.getByRole('button',{name:'模型设置',exact:true}).click();const settings=page.getByRole('dialog');await settings.getByLabel('生成模式',{exact:true}).waitFor();
  await settings.getByLabel('生成模式',{exact:true}).selectOption('dual-model');check('DeepSeek and Qwen settings are independently available',await settings.getByText('DeepSeek API Key',{exact:true}).count()===1&&await settings.getByText('百炼 API Key（留空沿用服务端配置）',{exact:true}).count()===1);
  await settings.getByLabel('地块生成链路',{exact:true}).selectOption('qwen-851');check('cloud removal exposes separate token input',await settings.getByRole('textbox',{name:'Replicate API Token',exact:true}).count()===1);
- await settings.getByLabel('地块生成链路',{exact:true}).selectOption('native-alpha');await settings.getByLabel('生成模式',{exact:true}).selectOption('offline');await settings.getByRole('button',{name:'关闭模型设置',exact:true}).click();
+ await settings.getByLabel('地块生成链路',{exact:true}).selectOption('native-alpha');
+ await settings.getByLabel('生成模式',{exact:true}).selectOption('offline');
+ await settings.getByRole('button',{name:'保存模型设置',exact:true}).click();
+ await settings.getByRole('status').filter({hasText:'设置已保存'}).waitFor();
+ await settings.getByRole('button',{name:'关闭模型设置',exact:true}).click();
  await page.getByLabel('便签 1',{exact:true}).fill('今天在公园散步，喝了咖啡，心情很开心。');await page.getByRole('button',{name:'再加一条便签',exact:true}).click();await page.getByLabel('便签 2',{exact:true}).fill('晚上回家读书休息。');await shot('01-diary-mobile');
  await page.getByRole('button',{name:'整理日记并选择重点',exact:true}).click();await page.getByRole('heading',{name:'选择需要重点表达的项目',exact:true}).waitFor();check('real extracted keywords show selectable focus items',await page.getByRole('checkbox').count()>=3);await shot('02-focus-mobile');
- await page.getByRole('button',{name:'确认重点，了解细节',exact:true}).click();await page.getByRole('button',{name:'生成两个离线模拟方案',exact:true}).waitFor();check('optional inquiry page permits zero answers',true);await shot('03-inquiry-mobile');
+ await page.getByRole('button',{name:'确认重点，了解细节',exact:true}).click();await page.getByRole('button',{name:'生成两个离线模拟方案',exact:true}).waitFor();check('optional inquiry page permits zero answers',true);
+ check('export diary snapshot button exists on inquiry', await page.getByText('📤 导出日记输入 JSON').count() === 1);
+ await shot('03-inquiry-mobile');
  await page.getByRole('button',{name:'生成两个离线模拟方案',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.candidate > .checker > img').length===2&&!document.querySelector('.busy'));await page.locator('.candidate img').evaluateAll(images=>Promise.all(images.map(image=>image.decode())));check('two mock images render through standalone server',await page.locator('.candidate').count()===2);check('candidate page has no back-to-inquiry action',await page.getByRole('button',{name:'返回选重点',exact:true}).count()===0);await shot('04-results-mobile');
  await page.locator('.candidate').first().getByRole('button',{name:'选择此结果',exact:true}).click();await page.getByRole('status').filter({hasText:'已保存选择'}).waitFor();check('selection saves to workbench instead of map',true);
  const downloadEvent=page.waitForEvent('download');await page.getByRole('button',{name:'导出实验 JSON',exact:true}).click();const download=await downloadEvent;check('experiment export has a portable JSON filename',download.suggestedFilename().endsWith('.json'));
  await page.reload({waitUntil:'networkidle'});await page.getByRole('heading',{name:'本次结果已选择',exact:true}).waitFor();check('selection and jobs restore after reload',await page.getByRole('button',{name:'已选择',exact:true}).count()===1);
  await page.setViewportSize({width:1280,height:900});check('desktop gets a two-column results workspace',await page.locator('.results').evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length===2));await shot('05-results-desktop');
  check('no horizontal overflow at mobile width',await page.setViewportSize({width:320,height:740}).then(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)));
+ await page.setViewportSize({width:1280,height:900});
+ await page.getByRole('button', { name: '🏛️ 实验档案馆' }).click();
+ await page.getByRole('heading', { name: '🏛️ 本地实验档案馆' }).waitFor();
+ check('archive playground renders in browser', true);
+ await shot('08-archive-desktop');
+ await page.getByRole('button', { name: '📋 日记主流程' }).click();
  // A separate browser context exercises online UI with intercepted, synthetic responses only.
  const online=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),op=await online.newPage();op.on('pageerror',error=>errors.push(error.message));
  let stageInput,focuses,questions,generated=0,queried=0,failImage=true;const jobs=new Map(),png='data:image/png;base64,'+mockPng(64,64).toString('base64');

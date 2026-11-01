@@ -3,6 +3,8 @@ import {readFile} from 'node:fs/promises';
 import {resolve,extname,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createAiHandler} from './ai/http.mjs';
+import {createArchiveHandler} from './archive/http.mjs';
+import {ArchiveService} from './archive/service.mjs';
 import {ModelSettings} from './ai/models.mjs';
 import {CompleteTerrainGeneration} from './ai/complete-terrain.mjs';
 import {withTerrainBackground} from './background-removal/http.mjs';
@@ -15,10 +17,14 @@ export async function createWorkbenchServer(options={}){
  const environment=loadImageEnv(root);
  const settings=options.settings||new ModelSettings({...environment,LIFE_MAP_TEXT_PROVIDER:environment.LIFE_MAP_TEXT_PROVIDER||'mock',LIFE_MAP_GENERATION_ROUTE:environment.LIFE_MAP_GENERATION_ROUTE||'native-alpha'});
  const storageRoot=options.storageRoot||resolve(root,'.local/terrain-candidates');
+ const archiveRoot=options.archiveRoot||resolve(root,'.local/experiment-archive');
+ const archive=options.archive||new ArchiveService({storageRoot:archiveRoot});
+ const archiveHandler=createArchiveHandler({archive});
  const interpreter=options.interpreter||(await import('../dist/domain/services/life-interpretation-service.js')).interpretLifeEntry;
  const ai=createAiHandler({cookieName:"life_map_workbench_ai",settings,interpreter,terrain:options.terrain||new CompleteTerrainGeneration(settings,{storageRoot})});
  const staticRoot=resolve(root,'dist');
  const listener=withTerrainBackground(async(req,res)=>{
+  if(await archiveHandler(req,res))return;
   if(await ai(req,res))return;
   const path=new URL(req.url,'http://localhost').pathname;
   if(path.startsWith('/api/'))return json(res,{error:'接口不存在'},404);

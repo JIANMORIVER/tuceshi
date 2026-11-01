@@ -7,6 +7,7 @@ import {FOCUS_KIND_LABELS} from '../services/diary-focus.js';
 import {StylePlayground} from './StylePlayground.js';
 import {ImageToImagePlayground} from './ImageToImagePlayground.js';
 import {LayeredInspector} from './LayeredInspector.js';
+import {ArchivePlayground} from './ArchivePlayground.js';
 import {PRESET_STYLE_PACKAGES,REFERENCE_ROLE_LABELS} from '../domain/experiment-rules.js';
 import './workbench.css';
 
@@ -15,7 +16,7 @@ const api=new WorkbenchApi();
 function App(){
  const [images,setImages]=useState<Record<string,{url:string;loaded:boolean;failed:boolean;reload:number}>>({});
  const flow=useMemo(()=>new Workbench(localStorage,api),[]),[,render]=useState(0),[settings,setSettings]=useState(false),[uiError,setUiError]=useState(''),[mode,setMode]=useState('正在读取模型状态');
- const [activeTab,setActiveTab]=useState<'process'|'style'|'i2i'|'inspector'>('process');
+ const [activeTab,setActiveTab]=useState<'process'|'style'|'i2i'|'inspector'|'archive'>('process');
 
  useEffect(()=>flow.subscribe(()=>render(n=>n+1)),[flow]);
  useEffect(()=>{
@@ -89,9 +90,9 @@ function App(){
   <main>
    <header className="top">
     <div>
-     <p className="eyebrow">LIFE MAP · STANDALONE V0.2.0</p>
+     <p className="eyebrow">LIFE MAP · STANDALONE V0.3.0</p>
      <h1>生图控制与实验工作台</h1>
-     <p>文生图 · 图生图 · 风格包迁移 · 分层干预 · 冻结对照实验</p>
+     <p>文生图 · 图生图 · 风格包迁移 · 分层干预 · 实验档案馆</p>
     </div>
     <button disabled={flow.busy||e.stage!=='write'} onClick={()=>setSettings(true)}>模型设置</button>
    </header>
@@ -128,6 +129,12 @@ function App(){
       onClick={()=>setActiveTab('inspector')}
     >
       🔍 6层干预检查器
+    </button>
+    <button
+      className={`tab-btn ${activeTab==='archive'?'active':''}`}
+      onClick={()=>setActiveTab('archive')}
+    >
+      🏛️ 实验档案馆
     </button>
    </nav>
 
@@ -172,13 +179,42 @@ function App(){
      />
    )}
 
+   {/* Tab 5: 本地实验档案馆 */}
+   {activeTab==='archive' && (
+     <ArchivePlayground
+       workbench={flow}
+       onNavigateToMain={()=>setActiveTab('process')}
+     />
+   )}
+
    {/* Tab 1: 主流水线流程 */}
    {activeTab==='process' && (
     <>
      {e.stage==='write'&&<section className="paper">
       <div className="section-title">
        <h2>写下今天的日记</h2>
-       <label>日期<input type="date" value={e.date} disabled={flow.busy} onChange={event=>update({date:event.target.value})}/></label>
+       <div className="title-actions">
+        <label className="button secondary file-upload-btn">
+         📥 导入日记输入 JSON
+         <input
+          type="file"
+          accept=".json"
+          style={{display:'none'}}
+          onChange={event=>{
+           const file=event.target.files?.[0];
+           if(!file)return;
+           const reader=new FileReader();
+           reader.onload=ev=>{
+            const content=ev.target?.result as string;
+            run(()=>flow.importDiarySnapshot(content));
+           };
+           reader.readAsText(file);
+           event.target.value='';
+          }}
+         />
+        </label>
+        <label>日期<input type="date" value={e.date} disabled={flow.busy} onChange={event=>update({date:event.target.value})}/></label>
+       </div>
       </div>
       <p>可以写多条便签，本次会合并为一份生成输入。不会读取日记岛已有记录。</p>
       {e.notes.map((note,index)=><label className="note" key={index}>便签 {index+1}<textarea aria-label={`便签 ${index+1}`} value={note} maxLength={12000} disabled={flow.busy} onChange={event=>update({notes:e.notes.map((old,i)=>i===index?event.target.value:old)})} placeholder="写下发生的事、此刻的心情和想记住的细节…"/></label>)}
@@ -200,6 +236,23 @@ function App(){
       <div className="actions">
        <button disabled={flow.busy} onClick={()=>run(()=>flow.back())}>返回选重点</button>
        <button disabled={flow.busy} onClick={()=>run(()=>flow.inquire())}>重试询问</button>
+       <button
+        type="button"
+        className="button secondary"
+        disabled={flow.busy}
+        onClick={()=>{
+         const jsonStr=flow.exportDiarySnapshot();
+         const blob=new Blob([jsonStr],{type:'application/json'});
+         const url=URL.createObjectURL(blob);
+         const a=document.createElement('a');
+         a.href=url;
+         a.download=`diary-input-${e.date||'snapshot'}.json`;
+         a.click();
+         setTimeout(()=>URL.revokeObjectURL(url),1000);
+        }}
+       >
+        📤 导出日记输入 JSON
+       </button>
        <button className="primary" disabled={flow.busy} onClick={()=>run(()=>flow.generate())}>
         {e.provider==='mock'?'生成两个离线模拟方案':'确认并生成两张地块'}
        </button>

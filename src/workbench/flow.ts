@@ -15,6 +15,10 @@ import {
   type ImageToImageRules,
   type ReferenceImageRole
 } from '../domain/experiment-rules.js';
+import {
+  exportDiaryInputSnapshot,
+  validateAndParseDiarySnapshot
+} from '../domain/diary-snapshot.js';
 
 export const STORAGE_KEY='life-map.image-workbench.v1';
 export type Stage='write'|'focus'|'inquiry'|'results'|'selected';
@@ -175,7 +179,214 @@ export class Workbench {
   this.edit({stage:'results',candidates});
   await Promise.all(candidates.map(candidate=>this.submit(candidate.id)));
  });}
- private snapshot(){const e=this.state,a=e.analysis!;return createSnapshot(e.date,e.rawText,{activities:a.envelope.diary_interpretation.activities,places:a.envelope.diary_interpretation.places,explicit_emotions:a.envelope.diary_interpretation.explicit_emotions,keywords:a.annotation.keywords,visualizable_events:e.focuses,potential_inquiries:e.questions},collectAnswers(e));}
+ private snapshot() {
+  const e = this.state;
+  const a = e.analysis;
+  const visualEvents = e.focuses;
+  const keywords = a?.annotation?.keywords || e.focuses.map(f => f.title);
+  const activities = a?.envelope?.diary_interpretation?.activities || [];
+  const places = a?.envelope?.diary_interpretation?.places || [];
+  const explicit_emotions = a?.envelope?.diary_interpretation?.explicit_emotions || [];
+  return createSnapshot(
+    e.date,
+    e.rawText,
+    {
+      activities,
+      places,
+      explicit_emotions,
+      keywords,
+      brief_analysis: (a as any)?.envelope?.diary_interpretation?.scene_summary || '日记快照事实提炼',
+      visualizable_events: visualEvents,
+      potential_inquiries: e.questions
+    },
+    collectAnswers(e)
+  );
+ }
+
+ exportDiarySnapshot(): string {
+  const e = this.state;
+  const snapshot = exportDiaryInputSnapshot({
+    date: e.date,
+    notes: e.notes,
+    focuses: e.focuses,
+    focusIds: e.focusIds,
+    answers: collectAnswers(e),
+    extra: e.extra
+  });
+  return JSON.stringify(snapshot, null, 2);
+ }
+
+ importDiarySnapshot(jsonStr: string): void {
+  const snapshot = validateAndParseDiarySnapshot(jsonStr);
+  const newId = crypto.randomUUID();
+  const focuses: VisualizableEventCandidate[] = snapshot.selected_focuses.map(f => ({
+    event_id: f.event_id,
+    title: f.title,
+    summary: f.title,
+    focus_kind: (f.focus_kind as any) || 'event',
+    evidence: f.evidence || '',
+    related_fact_ids: [],
+    event_type: 'activity',
+    suggested_priority: 1,
+    visual_cue_hint: f.title
+  }));
+  const focusIds = snapshot.selected_focuses.map(f => f.event_id);
+  const questions: StageAPotentialInquiry[] = snapshot.supplemental_answers
+    .filter(a => a.question_id !== 'extra')
+    .map(a => ({
+      question_id: a.question_id,
+      target_event_id: a.target_event_id,
+      question_text: a.question_text,
+      answer_options: [],
+      evidence: '',
+      reason_for_asking: '日记快照导入'
+    }));
+  const answers: Record<string, { option?: string; text?: string }> = {};
+  for (const ans of snapshot.supplemental_answers) {
+    if (ans.question_id !== 'extra') {
+      answers[ans.question_id] = { text: ans.final_answer };
+    }
+  }
+  const extra = snapshot.extra_detail || snapshot.supplemental_answers.find(a => a.question_id === 'extra')?.final_answer || '';
+
+  this.save({
+    ...freshExperiment(),
+    id: newId,
+    date: snapshot.diary_date || date(),
+    notes: snapshot.notes,
+    rawText: snapshot.notes.join('\n\n'),
+    stage: 'inquiry',
+    focuses,
+    focusIds,
+    questions,
+    answers,
+    extra,
+    lab: { ...freshExperiment().lab }
+  });
+ }
+
+ restoreFromRun(run: any, mode: 'input_only' | 'full_rules'): void {
+  if (!run) throw new Error('无效的实验记录');
+  const newId = crypto.randomUUID();
+  const diaryCase = run.diary_case || {};
+  const notes: string[] = Array.isArray(diaryCase.notes) && diaryCase.notes.length > 0 ? diaryCase.notes : [diaryCase.raw_text || ''];
+  const rawText = diaryCase.raw_text || notes.join('\n\n');
+  const rawFocuses = Array.isArray(diaryCase.focuses) ? diaryCase.focuses : [];
+  const focuses: VisualizableEventCandidate[] = rawFocuses.map((f: any) => ({
+    event_id: f.event_id || crypto.randomUUID(),
+    title: f.title || '重点',
+    summary: f.summary || f.title || '',
+    focus_kind: f.focus_kind || 'event',
+    evidence: f.evidence || '',
+    related_fact_ids: f.related_fact_ids || [],
+    event_type: f.event_type || 'activity',
+    suggested_priority: f.suggested_priority || 1,
+    visual_cue_hint: f.visual_cue_hint || f.title || ''
+  }));
+  const focusIds = focuses.map(f => f.event_id);
+
+  const supplementalAnswers = Array.isArray(diaryCase.answers) ? diaryCase.answers : [];
+  const questions: StageAPotentialInquiry[] = supplementalAnswers
+    .filter((a: any) => a.question_id !== 'extra')
+    .map((a: any) => ({
+      question_id: a.question_id,
+      target_event_id: a.target_event_id,
+      question_text: a.question_text,
+      answer_options: a.answer_options || [],
+      evidence: a.evidence || '',
+      reason_for_asking: '历史实验恢复'
+    }));
+  const answers: Record<string, { option?: string; text?: string }> = {};
+  for (const ans of supplementalAnswers) {
+    if (ans.question_id !== 'extra') {
+      answers[ans.question_id] = { text: ans.final_answer };
+    }
+  }
+  const extra = diaryCase.extra || supplementalAnswers.find((a: any) => a.question_id === 'extra')?.final_answer || '';
+
+  let nextLab = { ...freshExperiment().lab };
+  if (mode === 'full_rules') {
+    nextLab = {
+      mode: run.experiment_mode === 'image_to_image' ? 'image_to_image' : 'text_to_image',
+      selectedStyleId: run.style_package?.style_id || 'preset-gentle-pixel',
+      customStyleText: run.style_package?.style_text_rules,
+      customNegativeText: run.style_package?.negative_rules,
+      referenceImages: Array.isArray(run.reference_images) ? run.reference_images : [],
+      i2iRules: run.i2i_rules ? { ...DEFAULT_I2I_RULES, ...run.i2i_rules } : { ...DEFAULT_I2I_RULES }
+    };
+  }
+
+  this.save({
+    ...freshExperiment(),
+    id: newId,
+    date: diaryCase.diary_date || date(),
+    notes,
+    rawText,
+    stage: 'inquiry',
+    focuses,
+    focusIds,
+    questions,
+    answers,
+    extra,
+    lab: nextLab
+  });
+ }
+
+ async syncToArchive(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  try {
+    const exp = this.state;
+    const activeStyle = PRESET_STYLE_PACKAGES.find(s => s.style_id === exp.lab?.selectedStyleId);
+    const hasImage = exp.candidates.some(c => c.job?.image_url || c.job?.original_image_url);
+    const status = exp.selectedId ? 'completed' : (hasImage ? 'completed' : 'pending');
+    const runRecord = {
+      experiment_id: exp.id,
+      created_at: new Date().toISOString(),
+      experiment_mode: exp.lab?.mode || 'text_to_image',
+      status,
+      diary_case: {
+        diary_case_id: `case_${exp.id}`,
+        diary_date: exp.date,
+        notes: exp.notes,
+        raw_text: exp.rawText,
+        focuses: exp.focuses.filter(f => exp.focusIds.includes(f.event_id)),
+        answers: collectAnswers(exp),
+        extra: exp.extra
+      },
+      style_package: {
+        style_id: exp.lab?.selectedStyleId || 'preset-gentle-pixel',
+        name: activeStyle?.style_name || '自定义风格',
+        style_text_rules: exp.lab?.customStyleText?.trim() || activeStyle?.style_text_rules || '',
+        negative_rules: exp.lab?.customNegativeText?.trim() || activeStyle?.style_negative_rules || ''
+      },
+      i2i_rules: exp.lab?.i2iRules,
+      reference_images: exp.lab?.referenceImages || [],
+      candidates: exp.candidates.map(c => ({
+        id: c.id,
+        status: c.status,
+        submission_id: c.submissionId,
+        prompt: c.job?.submitted_prompt?.positive_prompt || '',
+        original_image_url: c.job?.original_image_url || '',
+        image_url: c.job?.image_url || '',
+        review_status: c.job?.manual_review?.decision === 'approved' ? 'approved' : 'pending',
+        review_comment: c.job?.manual_review?.reviewed_at ? '人工审核通过' : '',
+        is_selected: exp.selectedId === c.id,
+        model_info: {
+          provider: exp.provider,
+          pipeline: exp.pipeline
+        }
+      })),
+      selected_candidate_id: exp.selectedId
+    };
+    await fetch('/api/archive/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(runRecord)
+    });
+  } catch {
+    // 归档同步仅作为持久化辅助，不阻塞主流程
+  }
+ }
  private candidate(id:string){const c=this.state.candidates.find(c=>c.id===id);if(!c)throw Error('找不到方案。');return c;}
  private patchCandidate(id:string,patch:Partial<Candidate>){this.edit({candidates:this.state.candidates.map(c=>c.id===id?{...c,...patch}:c)});}
  async submit(id:string){
@@ -204,7 +415,9 @@ export class Workbench {
     image_pipeline:this.state.pipeline,
     lab_config
    });
-   if(!result.job?.job_id)throw Error('响应缺少任务标识，请查询原任务。');this.patchCandidate(id,{job:result.job,status:'known'});
+   if(!result.job?.job_id)throw Error('响应缺少任务标识，请查询原任务。');
+   this.patchCandidate(id,{job:result.job,status:'known'});
+   void this.syncToArchive();
   }catch(error){this.patchCandidate(id,{status:'unknown',error:(error instanceof Error?error.message:'提交状态未知')+'；不自动重提，可查询原任务。'});}
   finally{this.submitting.delete(candidate.submissionId);}
  }
@@ -226,8 +439,15 @@ export class Workbench {
   this.patchCandidate(id,{job,status:'known',error:undefined});
   if(this.state.selectedId===id&&!terrainUsable(job))this.edit({stage:'results',selectedId:undefined});
  });}
- approve(id:string){this.patchCandidate(id,{job:approveTerrain(this.candidate(id).job!)});}
- select(id:string){if(!terrainUsable(this.candidate(id).job))throw Error('方案尚未就绪或待审核。');this.edit({stage:'selected',selectedId:id});}
+ approve(id:string){
+  this.patchCandidate(id,{job:approveTerrain(this.candidate(id).job!)});
+  void this.syncToArchive();
+ }
+ select(id:string){
+  if(!terrainUsable(this.candidate(id).job))throw Error('方案尚未就绪或待审核。');
+  this.edit({stage:'selected',selectedId:id});
+  void this.syncToArchive();
+ }
  reset(){if(this.busy||this.submitting.size)throw Error('请等待当前请求完成。');this.save(freshExperiment());this.error='';this.emit();}
  export(){return JSON.stringify(this.state,null,2);}
 }

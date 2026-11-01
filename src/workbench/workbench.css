@@ -75,3 +75,103 @@
 .badge-frozen{background:#d8e8f8;color:#204f7c;font-weight:600}
 .ref-list-preview{margin:4px 0;padding-left:18px;font-size:12px;color:#555}
 @media(max-width:650px){.i2i-rules-grid{grid-template-columns:1fr}.frozen-banner{flex-direction:column;align-items:stretch}.frozen-banner button{width:100%}}
+
+/* V0.3.0 本地实验档案馆与快照导入导出样式 */
+.title-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.file-upload-btn{display:inline-flex;align-items:center;cursor:pointer;font-size:12px;padding:6px 14px}
+.archive-playground{margin-bottom:28px}
+.archive-actions{display:flex;gap:10px;align-items:center}
+.archive-filters{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:#f6f5ec;padding:12px 16px;border-radius:14px;border:1px solid #e2e0d3;margin-bottom:20px}
+.filter-group{display:flex;align-items:center;gap:8px;font-size:13px}
+.filter-group select{min-height:36px;padding:4px 8px;font-size:12px}
+.compare-switch{margin-left:auto;display:flex;align-items:center;gap:8px}
+.archive-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-bottom:24px}
+.archive-card{border:1px solid #dedcd0;background:#fff;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.archive-card:hover{border-color:#9bb48e;box-shadow:0 3px 8px rgba(0,0,0,0.04)}
+.archive-card.active{border-color:#4d6b46;box-shadow:0 0 0 2px #4d6b4633}
+.archive-card.compare-selected{border-color:#2a6f97;box-shadow:0 0 0 2px #2a6f9733;background:#f3f8fb}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start}
+.card-id-row{display:flex;gap:6px;align-items:center}
+.card-id{font-family:monospace;font-size:12px;font-weight:600;color:#444}
+.status-tag{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
+.status-tag.completed{background:#dcedd5;color:#335b2a}
+.status-tag.pending{background:#fdf2d0;color:#785816}
+.card-date{font-size:11px;color:#888}
+.card-thumb-area{position:relative;aspect-ratio:1.33/1;border-radius:10px;overflow:hidden;background:#f0eee4;display:flex;align-items:center;justify-content:center}
+.card-thumb{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.card-thumb-empty{font-size:12px;color:#999}
+.thumb-badge{position:absolute;bottom:6px;left:6px;font-size:10px;background:#000000a0;color:#fff;padding:2px 6px;border-radius:4px}
+.card-info{font-size:12px;display:flex;flex-direction:column;gap:4px}
+.card-style-title{font-weight:600;color:#2c3b28;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-focus-text{color:#6c7566;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-bottom-actions{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:8px;border-top:1px solid #f0eee5;font-size:12px}
+.compare-checkbox{display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#495842}
+.compare-checkbox input{min-height:16px;min-width:16px;margin:0}
+.btn-group{display:flex;gap:6px}
+.button.text{min-height:28px;padding:2px 8px;border:0;background:transparent;color:#466540;font-size:12px;font-weight:500}
+.button.text:hover{background:#edf2ea}
+.checkerboard{background:conic-gradient(#e7e9e2 25%,#fff 0 50%,#e7e9e2 0 75%,#fff 0) 0 0/16px 16px}
+
+/* A/B 并排对比视图 */
+.archive-compare-panel{margin-bottom:28px;padding:20px;border-radius:18px;border:2px solid #bed6ee;background:#f9fbfe}
+.compare-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.compare-header h3{margin:0;font-size:18px;color:#1d466b}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.compare-column{padding:16px;border-radius:14px;border:1px solid #d2e2f0;background:#fff;display:flex;flex-direction:column;gap:14px}
+.compare-col-header{display:flex;justify-content:space-between;align-items:center}
+.compare-col-header h4{margin:0;font-size:15px}
+.compare-image-box{aspect-ratio:1.25/1;border-radius:10px;overflow:hidden;background:#eee;position:relative;display:flex;align-items:center;justify-content:center}
+.compare-preview-img{width:100%;height:100%;object-fit:contain;image-rendering:pixelated}
+.compare-image-box .caption{position:absolute;bottom:6px;right:6px;font-size:11px;background:#000000aa;color:#fff;padding:2px 8px;border-radius:4px}
+.compare-meta{font-size:12px;display:flex;flex-direction:column;gap:8px}
+.compare-meta p{margin:0}
+.code-snippet{background:#f6f8f5;border:1px solid #e1e7de;border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.5;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.compare-actions{display:flex;gap:10px;margin-top:auto;padding-top:10px}
+.compare-actions button{flex:1;font-size:12px}
+
+/* 详情模态框 */
+.archive-modal-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;background:#00000066;backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:99;padding:20px}
+.archive-detail-modal{width:100%;max-width:850px;max-height:90vh;display:flex;flex-direction:column;border-radius:20px;overflow:hidden;background:#fff;padding:0}
+.modal-header{padding:18px 24px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;background:#fafaf7}
+.modal-header h3{margin:0;font-size:18px}
+.close-btn{font-size:18px;min-height:32px;cursor:pointer}
+.modal-content{padding:20px 24px;overflow-y:auto;display:flex;flex-direction:column;gap:20px}
+.detail-section h4{margin:0 0 10px;font-size:14px;color:#2c3b28}
+.diary-notes-box{background:#fcfbf6;border:1px solid #ece9db;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.note-item{line-height:1.6;color:#333}
+.focus-pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.focus-pill{background:#edf4e8;border:1px solid #c7ddbd;border-radius:8px;padding:4px 10px;font-size:12px;color:#2c4f24}
+.focus-pill .evidence{display:block;font-size:11px;color:#6b8564;margin-top:2px}
+.answers-box{background:#f8f9f6;border-radius:8px;padding:10px 14px;margin-top:8px;font-size:12px}
+.answers-box ul{margin:6px 0 0;padding-left:18px}
+.rules-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:12px}
+.i2i-rules-detail{margin-top:10px;font-size:12px}
+.i2i-rules-detail p{margin:4px 0}
+.reference-images-detail{margin-top:10px}
+.ref-imgs-list{display:flex;gap:10px;margin-top:8px;overflow-x:auto}
+.ref-img-card{border:1px solid #ddd;border-radius:8px;overflow:hidden;width:100px;flex-shrink:0;text-align:center;font-size:11px;padding-bottom:4px}
+.ref-img-card img{width:100%;height:70px;object-fit:cover;display:block}
+.candidates-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.candidate-result-card{border:1px solid #e4e3d7;border-radius:12px;padding:12px;background:#fbfbf9}
+.candidate-result-card.selected{border-color:#4d6b46;box-shadow:0 0 0 2px #4d6b4622}
+.c-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px}
+.badge.success{background:#d5ebd1;color:#27581f}
+.images-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.images-pair img{width:100%;aspect-ratio:1;object-fit:contain;border-radius:8px;image-rendering:pixelated}
+.images-pair .caption{font-size:11px;color:#777;margin-bottom:4px;text-align:center}
+.review-meta{margin-top:8px;font-size:11px;color:#666}
+.modal-footer{padding:14px 24px;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:center;background:#fafaf7}
+.toast{padding:10px 14px;border-radius:10px;margin-bottom:14px;font-size:13px}
+.toast.success{background:#e2f0d9;color:#28561d;border:1px solid #c2e0b1}
+.toast.error{background:#fde8e8;color:#851d1d;border:1px solid #f4c4c4}
+
+@media(max-width:750px){
+  .archive-filters{flex-direction:column;align-items:stretch}
+  .compare-switch{margin-left:0}
+  .compare-grid{grid-template-columns:1fr}
+  .candidates-result-grid{grid-template-columns:1fr}
+  .rules-grid{grid-template-columns:1fr}
+  .modal-footer{flex-direction:column;gap:10px}
+  .modal-footer .btn-group{width:100%}
+  .modal-footer .btn-group button{flex:1}
+}
