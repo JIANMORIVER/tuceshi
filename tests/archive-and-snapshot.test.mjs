@@ -314,3 +314,100 @@ test('HTTP 路由：/api/archive/* 接口功能测试', async () => {
     await rm(tmpRoot, { recursive: true, force: true });
   }
 });
+
+test('功能 A4 & B3：快照导入保留已有 provider、pipeline 与图生图 lab 配置', () => {
+  const storage = createMockStorage();
+  const flow = new Workbench(storage, { call: async () => ({}) });
+
+  // 1. 设置在线配置与图生图模式
+  flow.syncModelSettings({
+    textProvider: 'deepseek',
+    deepseek: { model: 'deepseek-chat', apiConfigured: true },
+    qwen: { model: 'qwen-plus', apiConfigured: true },
+    image: { model: 'qwen-image-2.0' },
+    generationRoute: 'qwen-851',
+    nativeImageModel: 'qwen-image-2.1-turbo',
+    secretLifetime: 'server-session-only',
+    pipeline: 'isometric-image-card-v1'
+  });
+  flow.setLab({
+    mode: 'image_to_image',
+    selectedStyleId: 'custom-style-xyz',
+    referenceImages: [{ id: 'ref1', name: 'structure.png', role: 'structure', dataUrl: 'data:image/png;base64,mock' }]
+  });
+
+  assert.equal(flow.state.provider, 'deepseek');
+  assert.equal(flow.state.pipeline.route, 'qwen-851');
+  assert.equal(flow.state.lab.mode, 'image_to_image');
+
+  // 2. 导入日记快照
+  const validJson = JSON.stringify({
+    schema_version: 'diary-input-v1',
+    diary_date: '2026-11-03',
+    notes: ['测试日记便签'],
+    selected_focuses: [{ event_id: 'f1', title: '散步', focus_kind: 'event', evidence: '散步' }],
+    supplemental_answers: []
+  });
+
+  flow.importDiarySnapshot(validJson);
+
+  // 3. 验证保留了 provider、pipeline 和 lab 配置，没有被粗暴重置为离线 mock
+  assert.equal(flow.state.provider, 'deepseek');
+  assert.equal(flow.state.pipeline.route, 'qwen-851');
+  assert.equal(flow.state.lab.mode, 'image_to_image');
+  assert.equal(flow.state.lab.selectedStyleId, 'custom-style-xyz');
+  assert.equal(flow.state.lab.referenceImages.length, 1);
+});
+
+test('功能 B4：导出 ZIP 包完整包含原始参考底图与图生图规则点文件', async () => {
+  const tmpRoot = await mkdtemp(join(tmpdir(), 'archive-i2i-zip-'));
+  try {
+    const archive = new ArchiveService({ storageRoot: tmpRoot });
+
+    const runData = {
+      experiment_id: 'exp_i2i_pack',
+      created_at: new Date().toISOString(),
+      experiment_mode: 'image_to_image',
+      status: 'completed',
+      reference_images: [
+        {
+          id: 'ref-base-1',
+          name: 'island_base.png',
+          role: 'structure',
+          dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        }
+      ],
+      i2i_rules: {
+        roleInstructions: '底图作为核心骨架',
+        preservationRules: '保留等距视角',
+        variationRules: '允许变化色彩',
+        prohibitions: '严禁生成文字'
+      },
+      candidates: []
+    };
+
+    await archive.saveRun(runData);
+
+    const zipBuffer = await archive.exportZip('exp_i2i_pack');
+    const parsed = parseZip(zipBuffer);
+
+    // 1. 验证 references/ 目录包含底图
+    const refFile = parsed.find(f => f.name.startsWith('references/'));
+    assert.ok(refFile, 'references folder exists in zip');
+    assert.ok(refFile.name.includes('structure'));
+    assert.ok(refFile.name.includes('island_base'));
+
+    // 2. 验证包含 i2i-rules.txt 与 i2i-rules.json
+    const rulesTxt = parsed.find(f => f.name === 'i2i-rules.txt');
+    assert.ok(rulesTxt, 'i2i-rules.txt exists in zip');
+    const content = rulesTxt.data.toString('utf8');
+    assert.ok(content.includes('【B. 严格保留规则】'));
+    assert.ok(content.includes('保留等距视角'));
+    assert.ok(content.includes('island_base.png'));
+
+    const rulesJson = parsed.find(f => f.name === 'i2i-rules.json');
+    assert.ok(rulesJson, 'i2i-rules.json exists in zip');
+  } finally {
+    await rm(tmpRoot, { recursive: true, force: true });
+  }
+});

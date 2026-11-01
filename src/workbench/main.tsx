@@ -21,7 +21,10 @@ function App(){
  useEffect(()=>flow.subscribe(()=>render(n=>n+1)),[flow]);
  useEffect(()=>{
   if(settings)return;
-  void api.call<any>('/api/model-settings').then(s=>setMode(s.textProvider==='mock'?'离线规则 · 零模型调用':`${s.textProvider} + ${s.generationRoute==='qwen-851'?'千问 / 851 Labs':'千问直接透明'}`)).catch(()=>setMode('模型服务不可用，请运行 npm run dev 或 npm start'));
+  void api.call<any>('/api/model-settings').then(s=>{
+   setMode(s.textProvider==='mock'?'离线规则 · 零模型调用':`${s.textProvider} + ${s.generationRoute==='qwen-851'?'千问 / 851 Labs':'千问直接透明'}`);
+   flow.syncModelSettings(s);
+  }).catch(()=>setMode('模型服务不可用，请运行 npm run dev 或 npm start'));
  },[settings]);
 
  const e=flow.state,run=(action:()=>void|Promise<void>)=>{setUiError('');try{const result=action();if(result)void result.catch(error=>setUiError(error.message));}catch(error){setUiError(error instanceof Error?error.message:'操作失败');}};
@@ -91,11 +94,11 @@ function App(){
   <main>
    <header className="top">
     <div>
-     <p className="eyebrow">LIFE MAP · STANDALONE V0.3.0</p>
+     <p className="eyebrow">LIFE MAP · STANDALONE V0.4.0</p>
      <h1>生图控制与实验工作台</h1>
      <p>文生图 · 图生图 · 风格包迁移 · 分层干预 · 实验档案馆</p>
     </div>
-    <button disabled={flow.busy||e.stage!=='write'} onClick={()=>setSettings(true)}>模型设置</button>
+    <button disabled={flow.busy||e.stage==='results'||e.stage==='selected'} onClick={()=>setSettings(true)}>模型设置</button>
    </header>
 
    <div className="status">
@@ -230,7 +233,13 @@ function App(){
      </section>}
 
      {e.stage==='inquiry'&&<section className="paper">
-      <h2>为了景观更贴近你的今天，可以再了解一些细节吗？</h2>
+      <div className="section-title">
+       <h2>为了景观更贴近你的今天，可以再了解一些细节吗？</h2>
+       <div className="inquiry-model-badge">
+        <span>生图模式：<strong>{e.provider==='mock'?'离线模拟':'在线千问生图'}</strong></span>
+        <button type="button" className="button text" disabled={flow.busy} onClick={()=>setSettings(true)}>⚙️ 切换模型</button>
+       </div>
+      </div>
       <p>{e.intro||'细节可以跳过，不回答也可以生图。'}</p>
       {e.questions.map(q=><fieldset className="question" key={q.question_id}><legend>{q.question_text}</legend>{q.input_type==='single_choice'&&<div className="choices">{q.answer_options.map(option=><button key={option} type="button" disabled={flow.busy} aria-pressed={e.answers[q.question_id]?.option===option} onClick={()=>update({answers:{...e.answers,[q.question_id]:{...e.answers[q.question_id],option:e.answers[q.question_id]?.option===option?undefined:option}}})}>{option}</button>)}</div>}<label>补充回答<input aria-label={q.question_text} disabled={flow.busy} value={e.answers[q.question_id]?.text||''} maxLength={500} onChange={event=>update({answers:{...e.answers,[q.question_id]:{...e.answers[q.question_id],text:event.target.value}}})}/></label></fieldset>)}
       <label className="note">还有想留下的细节吗？<textarea aria-label="额外细节" disabled={flow.busy} value={e.extra} maxLength={700} onChange={event=>update({extra:event.target.value})}/></label>

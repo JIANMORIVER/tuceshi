@@ -25,6 +25,81 @@ export const ImageToImagePlayground: React.FC<ImageToImagePlaygroundProps> = ({
   onUpdateReferenceImageRole
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const configInputRef = useRef<HTMLInputElement>(null);
+  const I2I_PRESET_STORAGE_KEY = 'life-map.i2i-saved-preset.v1';
+
+  const saveAsDefaultPreset = () => {
+    try {
+      const data = {
+        referenceImages: lab.referenceImages,
+        i2iRules: lab.i2iRules
+      };
+      localStorage.setItem(I2I_PRESET_STORAGE_KEY, JSON.stringify(data));
+      alert('已成功将当前参考图与图生图规则保存为本机常用预设！');
+    } catch {
+      alert('保存失败：图片体积可能超出浏览器缓存限制，建议使用“导出配置 JSON”。');
+    }
+  };
+
+  const loadDefaultPreset = () => {
+    try {
+      const raw = localStorage.getItem(I2I_PRESET_STORAGE_KEY);
+      if (!raw) {
+        alert('本机暂无已保存的图生图常用预设。请先配置后点击“存为常用”。');
+        return;
+      }
+      const data = JSON.parse(raw);
+      onUpdateLab({
+        mode: 'image_to_image',
+        referenceImages: Array.isArray(data.referenceImages) ? data.referenceImages : [],
+        i2iRules: data.i2iRules ? { ...lab.i2iRules, ...data.i2iRules } : lab.i2iRules
+      });
+      alert('已成功载入本机常用图生图预设！');
+    } catch {
+      alert('读取预设失败。');
+    }
+  };
+
+  const exportI2IConfig = () => {
+    const exportData = {
+      schema_version: 'i2i-config-v1',
+      exported_at: new Date().toISOString(),
+      mode: 'image_to_image',
+      reference_images: lab.referenceImages,
+      i2i_rules: lab.i2iRules
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `i2i-config-preset-${Date.now()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const handleImportI2IConfig = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (data.schema_version !== 'i2i-config-v1' && !data.reference_images && !data.referenceImages) {
+          throw new Error('不是合法的图生图配置包格式');
+        }
+        onUpdateLab({
+          mode: 'image_to_image',
+          referenceImages: Array.isArray(data.reference_images) ? data.reference_images : (data.referenceImages || []),
+          i2iRules: data.i2i_rules ? { ...lab.i2iRules, ...data.i2i_rules } : (data.i2iRules || lab.i2iRules)
+        });
+        alert('已成功导入图生图配置与参考底图！已自动切换为图生图模式。');
+      } catch (err: any) {
+        alert(`导入失败：${err.message || '文件解析错误'}`);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -107,6 +182,32 @@ export const ImageToImagePlayground: React.FC<ImageToImagePlaygroundProps> = ({
 
       {lab.mode === 'image_to_image' && (
         <div className="i2i-content">
+          <div className="i2i-toolbar">
+            <div className="btn-group">
+              <button type="button" className="button secondary" onClick={saveAsDefaultPreset} title="将当前的参考图和规则保存到浏览器缓存，下次随时载入">
+                💾 存为常用预设
+              </button>
+              <button type="button" className="button secondary" onClick={loadDefaultPreset} title="从浏览器缓存载入之前保存的常用参考图与规则">
+                🔄 载入常用预设
+              </button>
+            </div>
+            <div className="btn-group">
+              <button type="button" className="button secondary" onClick={exportI2IConfig} title="将参考图和规则打包导出为独立的 JSON 文件">
+                📤 导出配置包 (JSON)
+              </button>
+              <label className="button secondary file-upload-btn" title="上传之前导出的图生图配置 JSON">
+                📥 导入配置包 (JSON)
+                <input
+                  ref={configInputRef}
+                  type="file"
+                  accept=".json"
+                  style={{ display: 'none' }}
+                  onChange={handleImportI2IConfig}
+                />
+              </label>
+            </div>
+          </div>
+
           <div className="image-uploader">
             <div className="upload-header">
               <strong>参考图片列表（{lab.referenceImages.length}/3）</strong>

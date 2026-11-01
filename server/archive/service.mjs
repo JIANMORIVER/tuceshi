@@ -171,6 +171,54 @@ export class ArchiveService {
       await tryAdd(c.image_url, 'transparent');
     }
 
+    // 收集图生图参考图（底图、风格图等）
+    for (let i = 0; i < (run.reference_images || []).length; i++) {
+      const ref = run.reference_images[i];
+      if (ref?.dataUrl && ref.dataUrl.includes('base64,')) {
+        const [header, b64] = ref.dataUrl.split('base64,');
+        const ext = header.includes('jpeg') || header.includes('jpg') ? 'jpg' : (header.includes('webp') ? 'webp' : 'png');
+        const safeRole = ref.role || 'reference';
+        const cleanName = (ref.name || `ref-${i + 1}`).replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_\u4e00-\u9fa5.-]/g, '_');
+        zipFiles.push({
+          name: `references/${i + 1}-${safeRole}-${cleanName}.${ext}`,
+          data: Buffer.from(b64, 'base64')
+        });
+      }
+    }
+
+    // 导出图生图规则点说明文件
+    if (run.i2i_rules) {
+      const rulesText = [
+        '=== Life Map 图生图规则快照 (Image-to-Image Rules) ===',
+        `实验标识：${run.experiment_id || 'unknown'}`,
+        `导出时间：${new Date().toISOString()}`,
+        `实验模式：${run.experiment_mode || 'image_to_image'}`,
+        '',
+        '【A. 图片角色说明】',
+        run.i2i_rules.roleInstructions || '无',
+        '',
+        '【B. 严格保留规则】',
+        run.i2i_rules.preservationRules || '无',
+        '',
+        '【C. 允许变化规则】',
+        run.i2i_rules.variationRules || '无',
+        '',
+        '【D. 禁止事项与边界】',
+        run.i2i_rules.prohibitions || '无',
+        '',
+        '【参考图列表与对应角色】',
+        ...(run.reference_images || []).map((ref, idx) => `- 参考图 ${idx + 1}：${ref.name || '未命名'} [角色: ${ref.role || 'structure'}]`)
+      ].join('\n');
+      zipFiles.push({
+        name: 'i2i-rules.txt',
+        data: Buffer.from(rulesText, 'utf8')
+      });
+      zipFiles.push({
+        name: 'i2i-rules.json',
+        data: Buffer.from(JSON.stringify(run.i2i_rules, null, 2), 'utf8')
+      });
+    }
+
     return createZip(zipFiles);
   }
 

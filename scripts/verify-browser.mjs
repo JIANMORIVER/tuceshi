@@ -6,7 +6,10 @@ const base=process.env.WORKBENCH_URL||'http://127.0.0.1:5191';
 const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true}),page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
 const shot=name=>page.screenshot({path:`${out}/${name}.png`,fullPage:true});
 try{
- await page.goto(base,{waitUntil:'networkidle'});await page.getByText('离线规则 · 零模型调用',{exact:true}).waitFor();check('standalone opens in offline mode',true);check('has no formal map or navigation',await page.locator('.bottom-nav,canvas').count()===0);
+ await page.goto(base,{waitUntil:'networkidle'});
+ await page.locator('.status span').first().waitFor();
+ check('standalone opens and renders workbench',true);
+ check('has no formal map or navigation',await page.locator('.bottom-nav,canvas').count()===0);
  check('import diary snapshot button exists', await page.getByText('📥 导入日记输入 JSON').count() === 1);
  check('archive tab exists', await page.getByRole('button', { name: '🏛️ 实验档案馆' }).count() === 1);
  await page.getByRole('button',{name:'模型设置',exact:true}).click();const settings=page.getByRole('dialog');await settings.getByLabel('生成模式',{exact:true}).waitFor();
@@ -17,6 +20,8 @@ try{
  await settings.getByRole('button',{name:'保存模型设置',exact:true}).click();
  await settings.getByRole('status').filter({hasText:'设置已保存'}).waitFor();
  await settings.getByRole('button',{name:'关闭模型设置',exact:true}).click();
+ await page.getByText('离线规则 · 零模型调用',{exact:true}).waitFor();
+ check('standalone switches to offline mode',true);
  await page.getByLabel('便签 1',{exact:true}).fill('今天在公园散步，喝了咖啡，心情很开心。');await page.getByRole('button',{name:'再加一条便签',exact:true}).click();await page.getByLabel('便签 2',{exact:true}).fill('晚上回家读书休息。');await shot('01-diary-mobile');
  await page.getByRole('button',{name:'整理日记并选择重点',exact:true}).click();await page.getByRole('heading',{name:'选择需要重点表达的项目',exact:true}).waitFor();check('real extracted keywords show selectable focus items',await page.getByRole('checkbox').count()>=3);await shot('02-focus-mobile');
  await page.getByRole('button',{name:'确认重点，了解细节',exact:true}).click();await page.getByRole('button',{name:'生成两个离线模拟方案',exact:true}).waitFor();check('optional inquiry page permits zero answers',true);

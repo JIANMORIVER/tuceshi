@@ -129,6 +129,16 @@ export class Workbench {
  private save(next:Experiment){this.storage.setItem(STORAGE_KEY,JSON.stringify(next));this.state=next;this.emit();}
  edit(patch:Partial<Experiment>){this.save({...this.state,...patch});}
 
+ syncModelSettings(settings: PublicModelSettings) {
+  if (this.state.stage === 'results' || this.state.stage === 'selected') return;
+  const provider = settings.textProvider === 'mock' ? 'mock' : (settings.textProvider as any);
+  const pipeline = {
+    route: settings.generationRoute === 'qwen-851' ? ('qwen-851' as const) : ('native-alpha' as const),
+    model: settings.generationRoute === 'qwen-851' ? settings.image.model : (settings.nativeImageModel || 'qwen-image-2.1-turbo')
+  };
+  this.edit({ provider, pipeline });
+ }
+
  setLab(patch:Partial<LabConfig>){
   const lab={...(this.state.lab||freshExperiment().lab),...patch};
   this.save({...this.state,lab});
@@ -249,6 +259,10 @@ export class Workbench {
   }
   const extra = snapshot.extra_detail || snapshot.supplemental_answers.find(a => a.question_id === 'extra')?.final_answer || '';
 
+  const currentLab = this.state.lab || { ...freshExperiment().lab };
+  const currentProvider = this.state.provider;
+  const currentPipeline = this.state.pipeline;
+
   this.save({
     ...freshExperiment(),
     id: newId,
@@ -261,7 +275,9 @@ export class Workbench {
     questions,
     answers,
     extra,
-    lab: { ...freshExperiment().lab }
+    provider: currentProvider,
+    pipeline: currentPipeline,
+    lab: currentLab
   });
  }
 
@@ -304,7 +320,9 @@ export class Workbench {
   }
   const extra = diaryCase.extra || supplementalAnswers.find((a: any) => a.question_id === 'extra')?.final_answer || '';
 
-  let nextLab = { ...freshExperiment().lab };
+  const currentProvider = this.state.provider;
+  const currentPipeline = this.state.pipeline;
+  let nextLab = this.state.lab || { ...freshExperiment().lab };
   if (mode === 'full_rules') {
     nextLab = {
       mode: run.experiment_mode === 'image_to_image' ? 'image_to_image' : 'text_to_image',
@@ -328,6 +346,8 @@ export class Workbench {
     questions,
     answers,
     extra,
+    provider: currentProvider,
+    pipeline: currentPipeline,
     lab: nextLab
   });
  }
