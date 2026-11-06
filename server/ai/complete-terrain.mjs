@@ -354,7 +354,7 @@ export class CompleteTerrainGeneration {
     return new ImageGenerationService(config,{storageRoot:this.storageRoot,promptBuilder,...(this.adapter?{adapter:this.adapter}:{})});
   }
   generate(input){
-    if(!input || !['candidate_1','candidate_2'].includes(input.candidate_id) || typeof input.planning_run_id!=='string' || !input.planning_run_id || input.planning_run_id.length>200 || typeof input.snapshot?.input_text!=='string')throw new ImageCardError('INPUT_INVALID','候选需要当天快照与独立批次。',400);
+    if(!input || typeof input.candidate_id!=='string' || !input.candidate_id.trim() || input.candidate_id.length>100 || typeof input.planning_run_id!=='string' || !input.planning_run_id || input.planning_run_id.length>200 || typeof input.snapshot?.input_text!=='string')throw new ImageCardError('INPUT_INVALID','候选需要当天快照与独立批次。',400);
     const description=completeSceneDescription(input);
     const id=input.client_request_id||stableRequestId(`${input.planning_run_id}:${input.candidate_id}`);
     if(!validId(id))throw new ImageCardError('INPUT_INVALID','生成请求 ID 无效。',400);

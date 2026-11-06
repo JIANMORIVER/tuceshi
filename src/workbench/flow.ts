@@ -28,7 +28,17 @@ import {
 
 export const STORAGE_KEY='life-map.image-workbench.v1';
 export type Stage='write'|'focus'|'inquiry'|'results'|'selected';
-export type Candidate={id:'candidate_1'|'candidate_2';plan:SymbolicSceneCandidatePlan;submissionId:string;status:'not_started'|'submitting'|'known'|'unknown';job?:GenerationJob;error?:string};
+export type Candidate={
+  id: string;
+  plan: SymbolicSceneCandidatePlan;
+  submissionId: string;
+  status: 'not_started' | 'submitting' | 'known' | 'unknown';
+  job?: GenerationJob;
+  error?: string;
+  styleId?: string;
+  styleName?: string;
+  originCandidateId?: 'candidate_1' | 'candidate_2';
+};
 
 export interface LabConfig {
   mode: 'text_to_image' | 'image_to_image';
@@ -437,7 +447,8 @@ export class Workbench {
      }),
      ...customList
    ];
-   const activeStyle = allStyles.find(s => s.style_id === lab.selectedStyleId) || allStyles[0];
+   const targetStyleId = candidate.styleId || lab.selectedStyleId;
+   const activeStyle = allStyles.find(s => s.style_id === targetStyleId) || allStyles[0];
 
    // 2. 严格隔离：提取当前风格启用的参考图，绝不混杂其他风格
    const isStyleImageMode = (activeStyle.style_mode || 'text_and_image') === 'text_and_image';
@@ -469,11 +480,11 @@ export class Workbench {
    const isI2I = mergedImages.length > 0 || lab.mode === 'image_to_image';
    const lab_config = {
      mode: isI2I ? ('image_to_image' as const) : ('text_to_image' as const),
-     style: lab.customStyleText?.trim() || activeStyle?.style_text_rules,
-     negativeRules: lab.customNegativeText?.trim() || activeStyle?.style_negative_rules,
+     style: candidate.styleId ? activeStyle?.style_text_rules : (lab.customStyleText?.trim() || activeStyle?.style_text_rules),
+     negativeRules: candidate.styleId ? activeStyle?.style_negative_rules : (lab.customNegativeText?.trim() || activeStyle?.style_negative_rules),
      reference_images: mergedImages,
      i2i_rules: lab.i2iRules,
-     selected_style_id: lab.selectedStyleId,
+     selected_style_id: targetStyleId,
      style_package: activeStyle
    };
    const result=await this.api.call<{job:GenerationJob}>('/api/terrain/generate',{
@@ -519,6 +530,99 @@ export class Workbench {
   if(!terrainUsable(this.candidate(id).job))throw Error('方案尚未就绪或待审核。');
   this.edit({stage:'selected',selectedId:id});
   void this.syncToArchive();
+ }
+
+ /**
+  * 将当前生成的这套提示词/构图套入其他风格（支持同时多选多种风格，生成独立候选结果）
+  */
+ async applyOtherStyles(options: {
+   targetStyleIds: string[];
+   sourceCandidateIds?: string[];
+   autoSubmit?: boolean;
+ }) {
+   if (!Array.isArray(options.targetStyleIds) || options.targetStyleIds.length === 0) {
+     throw new Error('请至少选择一个要套用的目标风格。');
+   }
+
+   // 1. 获取所有可用风格（预设 + 自定义）
+   const customList = await loadAllCustomStyles().catch(() => []);
+   const presetOverrides: Record<string, { images: StyleReferenceImage[]; mode?: StyleMode }> = await loadPresetOverrides().catch(() => ({}));
+   const allStyles: StylePackage[] = [
+     ...PRESET_STYLE_PACKAGES.map(p => {
+       const override = presetOverrides[p.style_id];
+       return {
+         ...p,
+         style_mode: override?.mode || p.style_mode || 'text_and_image',
+         style_reference_images: override?.images || p.style_reference_images || []
+       };
+     }),
+     ...customList
+   ];
+
+   // 2. 确定源构图方案（默认套用全部原始方案，或由调用者指定）
+   const allCandidates = this.state.candidates;
+   const baseSourceCandidates = allCandidates.filter(c => !c.originCandidateId || c.id === 'candidate_1' || c.id === 'candidate_2');
+   const sourceCandidates = options.sourceCandidateIds
+     ? allCandidates.filter(c => options.sourceCandidateIds!.includes(c.id))
+     : (baseSourceCandidates.length > 0 ? baseSourceCandidates : allCandidates.slice(0, 2));
+
+   if (sourceCandidates.length === 0) {
+     throw new Error('没有可供套用的场景构图方案，请先在日记主流程完成至少一个方案的规划。');
+   }
+
+   const createdIds: string[] = [];
+   const updatedCandidates = [...allCandidates];
+
+   for (const styleId of options.targetStyleIds) {
+     const style = allStyles.find(s => s.style_id === styleId);
+     if (!style) continue;
+
+     for (const src of sourceCandidates) {
+       const baseKey = src.originCandidateId || (src.id.startsWith('candidate_') ? src.id : 'candidate_1');
+       const safeStyleKey = styleId.replace(/[^a-zA-Z0-9_-]/g, '_');
+       const newId = `${baseKey}__${safeStyleKey}`;
+
+       const existingIdx = updatedCandidates.findIndex(c => c.id === newId);
+       const newCandidate: Candidate = {
+         id: newId,
+         plan: { ...src.plan },
+         submissionId: crypto.randomUUID(),
+         status: 'not_started',
+         styleId: style.style_id,
+         styleName: style.style_name,
+         originCandidateId: (src.originCandidateId || (src.id === 'candidate_2' ? 'candidate_2' : 'candidate_1')) as 'candidate_1' | 'candidate_2'
+       };
+
+       if (existingIdx >= 0) {
+         updatedCandidates[existingIdx] = newCandidate;
+       } else {
+         updatedCandidates.push(newCandidate);
+       }
+       createdIds.push(newId);
+     }
+   }
+
+   this.edit({ candidates: updatedCandidates, stage: 'results' });
+   void this.syncToArchive();
+
+   // 3. 如果指定自动提交，并行提交新生成的方案
+   if (options.autoSubmit && createdIds.length > 0) {
+     await Promise.allSettled(createdIds.map(id => this.submit(id)));
+   }
+
+   return createdIds;
+ }
+
+ /**
+  * 移除某一个多风格衍生方案
+  */
+ removeCandidate(id: string) {
+   if (id === 'candidate_1' || id === 'candidate_2') return;
+   this.edit({
+     candidates: this.state.candidates.filter(c => c.id !== id),
+     selectedId: this.state.selectedId === id ? undefined : this.state.selectedId
+   });
+   void this.syncToArchive();
  }
  reset(){if(this.busy||this.submitting.size)throw Error('请等待当前请求完成。');this.save(freshExperiment());this.error='';this.emit();}
  export(){return JSON.stringify(this.state,null,2);}

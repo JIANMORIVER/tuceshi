@@ -259,7 +259,14 @@ export const StylePlayground: React.FC<StylePlaygroundProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ styles: allStyles })
       });
-      if (!res.ok) throw new Error('服务端导出 ZIP 失败');
+      if (!res.ok) {
+        let msg = `服务端返回状态码 ${res.status}`;
+        try {
+          const errJson = await res.json();
+          if (errJson.error) msg = errJson.error;
+        } catch {}
+        throw new Error(msg);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

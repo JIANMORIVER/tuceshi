@@ -103,14 +103,21 @@ export function parseStyleZipBuffer(buffer) {
       const nameMatched = styleKey && imgPath.toLowerCase().includes(styleKey);
 
       if (inSameDir || nameMatched) {
-        // 避免重复添加
-        if (!pkg.style_reference_images.some(existing => existing.name === imgBaseName)) {
-          const mime = getMimeType(imgBaseName);
-          const base64 = imgFile.data.toString('base64');
+        const mime = getMimeType(imgBaseName);
+        const base64 = imgFile.data.toString('base64');
+        const dataUrl = `data:${mime};base64,${base64}`;
+
+        const existing = pkg.style_reference_images.find(existing => existing.name === imgBaseName);
+        if (existing) {
+          if (!existing.dataUrl) {
+            existing.dataUrl = dataUrl;
+            existing.sizeBytes = existing.sizeBytes || imgFile.data.length;
+          }
+        } else {
           pkg.style_reference_images.push({
             id: `style-img-${pkg.style_id}-${pkg.style_reference_images.length + 1}`,
             name: imgBaseName,
-            dataUrl: `data:${mime};base64,${base64}`,
+            dataUrl,
             role: 'style',
             enabled: true,
             order: pkg.style_reference_images.length,
@@ -188,7 +195,7 @@ export function createStyleZipBuffer(styles = []) {
         });
         cleanRefImages.push({
           ...img,
-          dataUrl: img.dataUrl // 保持内嵌或按需读取
+          dataUrl: '' // 外部图片已单独存为二进制文件，JSON 内避免膨胀，解压导入时自动重构
         });
       } else {
         cleanRefImages.push(img);

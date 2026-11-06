@@ -8,7 +8,14 @@ import {StylePlayground} from './StylePlayground.js';
 import {ImageToImagePlayground} from './ImageToImagePlayground.js';
 import {LayeredInspector} from './LayeredInspector.js';
 import {ArchivePlayground} from './ArchivePlayground.js';
-import {PRESET_STYLE_PACKAGES,REFERENCE_ROLE_LABELS} from '../domain/experiment-rules.js';
+import {
+  PRESET_STYLE_PACKAGES,
+  REFERENCE_ROLE_LABELS,
+  type StylePackage,
+  type StyleReferenceImage,
+  type StyleMode
+} from '../domain/experiment-rules.js';
+import {loadAllCustomStyles, loadPresetOverrides} from '../domain/style-storage.js';
 import './workbench.css';
 
 const api=new WorkbenchApi();
@@ -18,7 +25,34 @@ function App(){
  const flow=useMemo(()=>new Workbench(localStorage,api),[]),[,render]=useState(0),[settings,setSettings]=useState(false),[uiError,setUiError]=useState(''),[mode,setMode]=useState('正在读取模型状态');
  const [activeTab,setActiveTab]=useState<'process'|'style'|'i2i'|'inspector'|'archive'>('process');
 
+ // 多风格平行对照实验状态
+ const [availableStyles,setAvailableStyles]=useState<StylePackage[]>(PRESET_STYLE_PACKAGES);
+ const [selectedOtherStyleIds,setSelectedOtherStyleIds]=useState<string[]>([]);
+ const [targetScope,setTargetScope]=useState<'all'|'candidate_1'|'candidate_2'>('all');
+ const [isApplyingStyles,setIsApplyingStyles]=useState(false);
+ const [showOtherStylesPanel,setShowOtherStylesPanel]=useState(false);
+
+ const refreshStyles = async () => {
+  try {
+   const customList = await loadAllCustomStyles().catch(() => []);
+   const presetOverrides: Record<string, { images: StyleReferenceImage[]; mode?: StyleMode }> = await loadPresetOverrides().catch(() => ({}));
+   const fullList: StylePackage[] = [
+    ...PRESET_STYLE_PACKAGES.map(p => {
+     const override = presetOverrides[p.style_id];
+     return {
+      ...p,
+      style_mode: override?.mode || p.style_mode || 'text_and_image',
+      style_reference_images: override?.images || p.style_reference_images || []
+     };
+    }),
+    ...customList
+   ];
+   setAvailableStyles(fullList);
+  } catch {}
+ };
+
  useEffect(()=>flow.subscribe(()=>render(n=>n+1)),[flow]);
+ useEffect(()=>{ void refreshStyles(); },[activeTab]);
  useEffect(()=>{
   if(settings)return;
   void api.call<any>('/api/model-settings').then(s=>{
@@ -35,21 +69,51 @@ function App(){
  const activeCandidate = e.candidates.find(c => c.id === (e.lab.frozenCandidateId || e.selectedId || 'candidate_1')) || e.candidates[0];
  const currentStyle = PRESET_STYLE_PACKAGES.find(s=>s.style_id===e.lab.selectedStyleId);
 
+ const groupedCandidates = useMemo(() => {
+  const map = new Map<string, { styleId: string; styleName: string; candidates: Candidate[] }>();
+  for (const c of e.candidates) {
+   const sId = c.styleId || e.lab.selectedStyleId || 'default';
+   const sName = c.styleName || availableStyles.find(s => s.style_id === sId)?.style_name || '默认风格';
+   if (!map.has(sId)) {
+    map.set(sId, { styleId: sId, styleName: sName, candidates: [] });
+   }
+   map.get(sId)!.candidates.push(c);
+  }
+  return Array.from(map.values());
+ }, [e.candidates, e.lab.selectedStyleId, availableStyles]);
+
  const result=(candidate:Candidate)=>{
   const isFrozen = e.lab.frozenCandidateId === candidate.id;
   const job = candidate.job;
   const isI2I = job?.generation_mode === 'image_to_image' || (!job && e.lab.mode === 'image_to_image');
   const refCount = job?.reference_images?.length || e.lab.referenceImages.length;
+  const originPlan = candidate.originCandidateId || (candidate.id.startsWith('candidate_2') ? 'candidate_2' : 'candidate_1');
+  const planLabel = originPlan === 'candidate_2' ? '方案二' : '方案一';
+  const candStyle = availableStyles.find(s => s.style_id === (candidate.styleId || e.lab.selectedStyleId)) || currentStyle;
+  const styleLabel = candidate.styleName || candStyle?.style_name || '默认风格';
+  const isDerived = candidate.id !== 'candidate_1' && candidate.id !== 'candidate_2';
 
   return (
-   <article className={`candidate ${isFrozen?'candidate-frozen':''}`} key={candidate.id} data-status={candidate.status}>
-    <header>
-     <div>
-      <h3>{candidate.plan.title}</h3>
+   <article className={`candidate ${isFrozen?'candidate-frozen':''} ${isDerived?'candidate-derived':''}`} key={candidate.id} data-status={candidate.status}>
+    <header className="candidate-header">
+     <div className="candidate-header-main">
+      <div className="candidate-title-row">
+       <h3>{candidate.plan.title}</h3>
+       {isDerived && (
+        <button
+         type="button"
+         className="button text-btn remove-cand-btn"
+         onClick={()=>flow.removeCandidate(candidate.id)}
+         title="移除此风格对照方案"
+        >
+         ✕ 移除方案
+        </button>
+       )}
+      </div>
       <div className="candidate-badges">
-       <span className="badge-pill">{candidate.id==='candidate_1'?'方案一':'方案二'}</span>
+       <span className="badge-pill">{planLabel}</span>
        {isI2I ? <span className="badge-pill badge-i2i">图生图 ({refCount}张参考)</span> : <span className="badge-pill badge-t2i">纯文生图</span>}
-       <span className="badge-pill badge-style">{currentStyle?.style_name||'默认风格'}</span>
+       <span className="badge-pill badge-style" title={styleLabel}>🎨 {styleLabel}</span>
        {isFrozen && <span className="badge-pill badge-frozen">❄️ 已锁定构图</span>}
       </div>
      </div>
@@ -126,7 +190,7 @@ function App(){
       className={isFrozen ? 'secondary active' : 'secondary'}
       title="锁定此构图描述，切换风格或参考图后进行单变量生成实验"
       disabled={flow.busy}
-      onClick={()=>flow.freezeCandidate(candidate.id)}
+      onClick={()=>flow.freezeCandidate((candidate.originCandidateId || candidate.id) as any)}
      >
       {isFrozen ? '❄️ 构图已锁定' : '❄️ 锁定此构图做对照'}
      </button>
@@ -141,7 +205,7 @@ function App(){
   <main>
    <header className="top">
     <div>
-     <p className="eyebrow">LIFE MAP · STANDALONE V0.4.1</p>
+     <p className="eyebrow">LIFE MAP · STANDALONE V0.7.0</p>
      <h1>生图控制与实验工作台</h1>
      <p>文生图 · 图生图 · 风格包迁移 · 分层干预 · 实验档案馆</p>
     </div>
@@ -355,7 +419,206 @@ function App(){
        </div>
       )}
 
-      <div className="results">{e.candidates.map(result)}</div>
+      {/* 方案分组渲染：单风格平铺，多风格按风格分栏 */}
+      {groupedCandidates.length > 1 ? (
+        <div className="multi-style-results-container">
+          {groupedCandidates.map(group => (
+            <div className="style-candidate-group" key={group.styleId}>
+              <div className="style-group-header">
+                <div className="style-group-title">
+                  <span className="style-group-icon">🎨</span>
+                  <h4>{group.styleName}</h4>
+                  <span className="style-group-count">（共 {group.candidates.length} 个方案）</span>
+                </div>
+                {group.candidates.some(c => c.status === 'not_started') && (
+                  <button
+                    type="button"
+                    className="button small primary"
+                    disabled={flow.busy}
+                    onClick={() => run(async () => {
+                      await Promise.allSettled(group.candidates.filter(c => c.status === 'not_started').map(c => flow.submit(c.id)));
+                    })}
+                  >
+                    🚀 提交本风格全部方案
+                  </button>
+                )}
+              </div>
+              <div className="results">{group.candidates.map(result)}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="results">{e.candidates.map(result)}</div>
+      )}
+
+      {/* 使用其他风格（多风格平行对照） */}
+      <section className="other-styles-panel" aria-label="使用其他风格平行探索">
+        <div className="other-styles-header" onClick={() => setShowOtherStylesPanel(prev => !prev)}>
+          <div className="other-styles-title">
+            <span className="other-styles-icon">✨</span>
+            <div>
+              <h3>使用其他风格（多风格平行对照）</h3>
+              <p>将当前日记场景构图与提示词快速套入其他风格，生成独立的方案进行画风与透明度对比</p>
+            </div>
+          </div>
+          <button type="button" className="button secondary toggle-btn">
+            {showOtherStylesPanel ? '收起选项 ▲' : '展开多选风格 ▼'}
+          </button>
+        </div>
+
+        {showOtherStylesPanel && (
+          <div className="other-styles-body">
+            <div className="scope-selection-bar">
+              <span className="label">套用构图范围：</span>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="sourceScope"
+                  checked={targetScope === 'all'}
+                  onChange={() => setTargetScope('all')}
+                />
+                方案一 + 方案二（推荐，生成双方案）
+              </label>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="sourceScope"
+                  checked={targetScope === 'candidate_1'}
+                  onChange={() => setTargetScope('candidate_1')}
+                />
+                仅方案一
+              </label>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="sourceScope"
+                  checked={targetScope === 'candidate_2'}
+                  onChange={() => setTargetScope('candidate_2')}
+                />
+                仅方案二
+              </label>
+            </div>
+
+            <div className="style-selection-toolbar">
+              <span className="label">选择目标风格（可多选）：</span>
+              <div className="toolbar-actions">
+                <button
+                  type="button"
+                  className="button text-btn"
+                  onClick={() => {
+                    const otherIds = availableStyles
+                      .filter(s => s.style_id !== e.lab.selectedStyleId)
+                      .map(s => s.style_id);
+                    setSelectedOtherStyleIds(otherIds);
+                  }}
+                >
+                  勾选全部其他风格
+                </button>
+                <button
+                  type="button"
+                  className="button text-btn"
+                  onClick={() => setSelectedOtherStyleIds([])}
+                >
+                  清空选择
+                </button>
+              </div>
+            </div>
+
+            <div className="style-selection-grid">
+              {availableStyles.map(s => {
+                const isCurrentBase = s.style_id === e.lab.selectedStyleId;
+                const isChecked = selectedOtherStyleIds.includes(s.style_id);
+                const alreadyGenerated = e.candidates.some(c => c.styleId === s.style_id || (isCurrentBase && !c.styleId));
+                return (
+                  <label
+                    key={s.style_id}
+                    className={`style-select-chip ${isChecked ? 'selected' : ''} ${isCurrentBase ? 'current-base' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      disabled={isCurrentBase}
+                      checked={isChecked}
+                      onChange={ev => {
+                        if (ev.target.checked) {
+                          setSelectedOtherStyleIds(prev => [...prev, s.style_id]);
+                        } else {
+                          setSelectedOtherStyleIds(prev => prev.filter(id => id !== s.style_id));
+                        }
+                      }}
+                    />
+                    <span className="style-chip-name">{s.style_name}</span>
+                    {isCurrentBase && <span className="chip-tag base-tag">基准风格</span>}
+                    {alreadyGenerated && !isCurrentBase && <span className="chip-tag generated-tag">已生成</span>}
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="other-styles-actions">
+              <div className="action-summary">
+                {selectedOtherStyleIds.length > 0 ? (
+                  <span>
+                    已选择 <strong>{selectedOtherStyleIds.length}</strong> 种风格 × {targetScope === 'all' ? '2 个方案' : '1 个方案'} = 将生成 <strong>{selectedOtherStyleIds.length * (targetScope === 'all' ? 2 : 1)}</strong> 张独立对比图
+                  </span>
+                ) : (
+                  <span className="hint-text">请在上方勾选至少 1 个目标风格开始平行探索</span>
+                )}
+              </div>
+              <div className="action-buttons">
+                <button
+                  type="button"
+                  className="button secondary"
+                  disabled={selectedOtherStyleIds.length === 0 || isApplyingStyles || flow.busy}
+                  onClick={async () => {
+                    try {
+                      setIsApplyingStyles(true);
+                      const sources = targetScope === 'all'
+                        ? undefined
+                        : (targetScope === 'candidate_1' ? ['candidate_1'] : ['candidate_2']);
+                      await flow.applyOtherStyles({
+                        targetStyleIds: selectedOtherStyleIds,
+                        sourceCandidateIds: sources,
+                        autoSubmit: false
+                      });
+                    } catch (err: any) {
+                      setUiError(err.message || '创建多风格方案失败');
+                    } finally {
+                      setIsApplyingStyles(false);
+                    }
+                  }}
+                >
+                  ➕ 仅创建方案卡片（稍后手动提交）
+                </button>
+                <button
+                  type="button"
+                  className="button primary"
+                  disabled={selectedOtherStyleIds.length === 0 || isApplyingStyles || flow.busy}
+                  onClick={async () => {
+                    try {
+                      setIsApplyingStyles(true);
+                      const sources = targetScope === 'all'
+                        ? undefined
+                        : (targetScope === 'candidate_1' ? ['candidate_1'] : ['candidate_2']);
+                      await flow.applyOtherStyles({
+                        targetStyleIds: selectedOtherStyleIds,
+                        sourceCandidateIds: sources,
+                        autoSubmit: true
+                      });
+                    } catch (err: any) {
+                      setUiError(err.message || '多风格并行生成失败');
+                    } finally {
+                      setIsApplyingStyles(false);
+                    }
+                  }}
+                >
+                  {isApplyingStyles ? '正在提交生成…' : '🚀 立即套用并开始生图'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
       {e.stage==='selected'&&<p className="success" role="status">已保存选择，可导出实验JSON与图片；不会放入正式地图。</p>}
      </>}
     </>
