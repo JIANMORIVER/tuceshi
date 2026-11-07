@@ -177,7 +177,7 @@ test('V0.7.5 验收项 5：图生图参考图片映射与用户自定义 4 项�
   ];
 
   const customRules = {
-    roleInstructions: '图1控制地表底座，图2控制人物尺寸，图3控制水彩质感',
+    roleInstructions: '包含 3 张输入参考图（图编角色指导：图1控制地表底座，图2控制人物尺寸，图3控制水彩质感）：\n- 图1(结构底图 · my_courtyard_base.png)：严格遵循结构参考图的地块外形、基本视角与道路连接口，结构图中的每个红色标记，都必须转化为指定边缘上的自然道路出口，道路必须延伸至地块边缘，严禁复制参考图边框或UI\n- 图2(尺度参考 · human_scale_ruler.png)：严格以尺度参考图为准，控制人物、建筑、树木、道路与生活物件的相对大小与比例尺，微观箱景比例自然，严格禁止借用其画风、材质或色彩，不影响画面风格\n- 图3(风格参考 · autumn_palette.png)：【风格图画法指导】参考其绘画笔触、线条、色块、材质质感、配色与细节密度，仅学习其艺术画法；严禁复制参考图内的具体建筑、主体造型、构图、文字、UI或拼图标记',
     preservationRules: '必须严格保留中央水池、木质小桥与红砖小径',
     variationRules: '背景树木允许替换为落叶银杏树，可增加几盏暖色地灯',
     prohibitions: '严禁生成任何围栏或现代铁丝网'
@@ -194,7 +194,6 @@ test('V0.7.5 验收项 5：图生图参考图片映射与用户自定义 4 项�
   );
 
   const prompt = promptResult.positive;
-  console.log(`[V0.7.5 验收项 5] 包含多图与自定义规则的完整 Prompt:\n${prompt}`);
 
   // 1. 验证放入的图片映射完整且包含文件名与角色
   assert.ok(prompt.includes('包含 3 张输入参考图'));
@@ -213,4 +212,31 @@ test('V0.7.5 验收项 5：图生图参考图片映射与用户自定义 4 项�
 
   // 5. 验证 D. 禁止事项与边界生效
   assert.ok(prompt.includes('严禁生成任何围栏或现代铁丝网'));
+});
+
+test('V0.7.5 验收项 6：用户完全自主决定地块结构文案，系统 100% 忠实采纳，绝不强加固定死板长句套话', () => {
+  const userOnlyWritten = '我自定义的极简地块结构：菱形底座薄一些，左边红线出口接小河，右边平缓。';
+
+  const promptResult = buildCleanScenePrompt(
+    '在小溪边的野餐垫上喝咖啡。',
+    {
+      mode: 'image_to_image',
+      reference_images: [{ id: 'ref-1', role: 'structure', name: 'base.png' }],
+      i2i_rules: {
+        roleInstructions: userOnlyWritten
+      },
+      generationRoute: 'opaque'
+    }
+  );
+
+  const prompt = promptResult.positive;
+  console.log(`[V0.7.5 验收项 6] 用户完全自写地块结构文案 Prompt:\n${prompt}`);
+
+  // 1. 必须 100% 完整包含用户自己写的文案
+  assert.ok(prompt.includes(userOnlyWritten));
+
+  // 2. 绝不能强行拼接系统死板的固定模板长句
+  assert.doesNotMatch(prompt, /允许穿过围墙或边缘装饰/);
+  assert.doesNotMatch(prompt, /禁止只在地块内部生成道路/);
+  assert.doesNotMatch(prompt, /不同场景允许使用不同道路材质/);
 });

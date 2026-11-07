@@ -380,51 +380,28 @@ export function buildCleanScenePrompt(description, options = {}) {
   const refImages = Array.isArray(options.referenceImages) ? options.referenceImages : (Array.isArray(options.reference_images) ? options.reference_images : []);
   const i2iRules = options.i2iRules || options.i2i_rules;
   const stylePkg = options.stylePackage || options.style_package;
-  const isI2I = options.mode === 'image_to_image' || refImages.length > 0;
 
-  // 用户在图生图实验场填写的 4 个规则文案（实时响应用户编辑）
-  const userRoleInst = i2iRules?.roleInstructions?.replace(/黑色标记/g, '红色标记')?.trim();
+  // 用户自主填写的 4 个规则文案（100% 自由决定，用户写什么就是什么，系统绝不写死覆盖）
+  const userStructureText = (options.structureRules || options.customStructureText || i2iRules?.roleInstructions || '').replace(/黑色标记/g, '红色标记').trim();
   const userPreserve = i2iRules?.preservationRules?.trim();
   const userVariation = i2iRules?.variationRules?.trim();
   const userProhibit = i2iRules?.prohibitions?.trim();
 
-  const structImgs = refImages.filter(img => img?.role === 'structure');
-  const scaleImgs = refImages.filter(img => img?.role === 'scale');
-  const styleImgs = refImages.filter(img => img?.role === 'style');
-  const contentImgs = refImages.filter(img => img?.role === 'content');
-
-  // 1. 地块结构与参考图映射 (structure)
-  let structLines = [];
-  if (refImages.length > 0) {
-    const roleSummary = userRoleInst ? `（图编角色指导：${userRoleInst}）` : '';
-    structLines.push(`包含 ${refImages.length} 张输入参考图${roleSummary}：`);
-    refImages.forEach((img, idx) => {
-      const num = idx + 1;
-      const role = img.role || 'structure';
-      const name = img.name ? ` · ${img.name}` : '';
-      if (role === 'structure') {
-        structLines.push(`- 图${num}(结构底图${name})：严格遵循结构参考图的地块外形、基本视角与道路连接口，结构图中的每个红色标记，都必须转化为指定边缘上的自然道路出口，对应相邻地块的自然道路出口，道路必须延伸至地块边缘，严禁复制参考图边框或UI`);
-      } else if (role === 'scale') {
-        structLines.push(`- 图${num}(尺度参考${name})：严格以尺度参考图为准，控制人物、建筑、树木、道路与生活物件的相对大小与比例尺，微观箱景比例自然，严格禁止借用其画风、材质或色彩，不影响画面风格`);
-      } else if (role === 'style') {
-        structLines.push(`- 图${num}(风格参考${name})：【风格图画法指导】参考其绘画笔触、线条、色块、材质质感、配色与细节密度，仅学习其艺术画法；严禁复制参考图内的具体建筑、主体造型、构图、文字、UI或拼图标记`);
-      } else if (role === 'content') {
-        structLines.push(`- 图${num}(内容参考${name})：参考其特定物件或建筑造型的视觉外观`);
-      } else {
-        structLines.push(`- 图${num}(参考图${name})：提供局部视觉参考`);
-      }
-    });
-  } else if (isI2I && userRoleInst) {
-    structLines.push(`图编角色指导：${userRoleInst}`);
-  } else {
-    structLines.push('等距正方形菱形地块，薄而平整的等厚底座，边沿平直平整，便于拼接');
+  // 1. 地块结构与参考图映射 (完全由用户自己决定、自由编写)
+  let structText = userStructureText;
+  if (!structText) {
+    // 仅当用户未填写任何自定义文案时，系统才回退到基础描述
+    if (refImages.length > 0) {
+      structText = '严格遵循结构参考图的地块外形、基本视角与道路连接口，结构图中的每个红色标记，都必须转化为指定边缘上的自然道路出口，对应相邻地块的自然道路出口，道路必须延伸至地块边缘，严禁复制参考图边框或UI';
+    } else {
+      structText = '等距正方形菱形地块，薄而平整的等厚底座，边沿平直平整，便于拼接';
+    }
   }
 
   // 注入用户配置的严格保留规则 (B. 严格保留规则)
-  if (userPreserve) {
-    structLines.push(`【严格保留】：${userPreserve}`);
+  if (userPreserve && !structText.includes(userPreserve)) {
+    structText += `\n【严格保留】：${userPreserve}`;
   }
-  const structText = structLines.join('\n');
 
   // 2. 场景主体与生活内容 (scene)
   const cleanScene = description
@@ -439,14 +416,16 @@ export function buildCleanScenePrompt(description, options = {}) {
   const sceneText = sceneLines.join('\n');
 
   // 3. 相对尺度 (scale)
+  const scaleImgs = refImages.filter(img => img?.role === 'scale');
   let scaleText = '物体与建筑保持等距像素插画的标准比例尺，房屋、树木、生活物件与人物相对大小自然协调';
-  if (scaleImgs.length > 0) {
+  if (scaleImgs.length > 0 && !structText.includes('尺度参考图') && !structText.includes('尺度图')) {
     scaleText = '严格以尺度参考图为准，微观箱景比例自然协调，严格禁止借用其画风、材质或色彩，不影响画面风格';
   }
 
   // 4. 纯画风说明 (style)
   const rawStyle = options.style?.trim() || stylePkg?.style_text_rules?.trim() || stylePkg?.style_prompt?.trim() || STYLE;
   let styleText = sanitizeCoreArtStyle(rawStyle);
+  const styleImgs = refImages.filter(img => img?.role === 'style');
   if (styleImgs.length > 0 && !structText.includes('【风格图画法指导】')) {
     styleText += '。【风格图画法指导】：参考笔触、线条、色块与色彩质感，严禁复制参考图内的具体建筑、主体、文字或UI。';
   }

@@ -53,6 +53,7 @@ export interface LabConfig {
   selectedStyleId: string;
   customStyleText?: string;
   customNegativeText?: string;
+  customStructureText?: string;
   referenceImages: ReferenceImage[];
   i2iRules: ImageToImageRules;
   frozenCandidateId?: 'candidate_1' | 'candidate_2';
@@ -527,6 +528,7 @@ export class Workbench {
      mode: isI2I ? ('image_to_image' as const) : ('text_to_image' as const),
      style: candidate.styleId ? activeStyle?.style_text_rules : (lab.customStyleText?.trim() || activeStyle?.style_text_rules),
      negativeRules: candidate.styleId ? activeStyle?.style_negative_rules : (lab.customNegativeText?.trim() || activeStyle?.style_negative_rules),
+     structureRules: lab.customStructureText?.trim() || lab.i2iRules?.roleInstructions?.trim(),
      reference_images: mergedImages,
      i2i_rules: lab.i2iRules,
      selected_style_id: targetStyleId,

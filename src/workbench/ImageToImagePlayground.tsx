@@ -351,13 +351,54 @@ export const ImageToImagePlayground: React.FC<ImageToImagePlaygroundProps> = ({
             </summary>
             <div className="i2i-rules-grid">
               <label className="rule-field">
-                <span>A. 图片角色说明</span>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.3rem',flexWrap:'wrap',gap:'0.3rem'}}>
+                  <span style={{fontWeight:'bold'}}>A. 地块结构与参考图规则 (完全自主决定与编写)</span>
+                  <div style={{display:'flex',gap:'0.3rem'}}>
+                    <button
+                      type="button"
+                      style={{fontSize:'0.75rem',padding:'0.15rem 0.45rem',cursor:'pointer',borderRadius:'3px',border:'1px solid #d9d9d9',background:'#fff'}}
+                      title="根据当前上传的参考图自动生成草稿文案，填入框内供您在此基础上自由修改"
+                      disabled={busy}
+                      onClick={() => {
+                        const count = lab.referenceImages.length;
+                        if (count === 0) {
+                          updateRule('roleInstructions', '等距正方形菱形地块，薄而平整的等厚底座，边沿平直平整，便于拼接。');
+                          return;
+                        }
+                        const draftLines = [`包含 ${count} 张输入参考图：`];
+                        lab.referenceImages.forEach((img, i) => {
+                          const n = i + 1;
+                          if (img.role === 'structure') draftLines.push(`- 图${n}(结构底图 · ${img.name})：严格遵循结构参考图的地块外形与基本视角，红色标记对应相邻地块自然道路出口，道路必须延伸至地块边缘。`);
+                          else if (img.role === 'scale') draftLines.push(`- 图${n}(尺度参考 · ${img.name})：控制人物、建筑与物件相对比例尺，微观生活箱景比例，严格不影响画风色彩。`);
+                          else if (img.role === 'style') draftLines.push(`- 图${n}(风格参考 · ${img.name})：【风格图画法指导】参考笔触、线条与色彩质感，严禁复制原图建筑、主体或UI。`);
+                          else draftLines.push(`- 图${n}(内容参考 · ${img.name})：参考其特定物件或造型细节。`);
+                        });
+                        updateRule('roleInstructions', draftLines.join('\n'));
+                      }}
+                    >
+                      🪄 生成参考图映射草稿
+                    </button>
+                    <button
+                      type="button"
+                      style={{fontSize:'0.75rem',padding:'0.15rem 0.45rem',cursor:'pointer',borderRadius:'3px',border:'1px solid #d9d9d9',background:'#fff'}}
+                      title="清空此框，完全从头自己手写"
+                      disabled={busy}
+                      onClick={() => updateRule('roleInstructions', '')}
+                    >
+                      清空自写
+                    </button>
+                  </div>
+                </div>
                 <textarea
-                  rows={2}
+                  rows={4}
                   value={lab.i2iRules.roleInstructions}
                   disabled={busy}
+                  placeholder="在此自由编写发往模型关于地块结构与参考图角色的指导词。由您完全决定，系统绝不强加固定死板模板。"
                   onChange={e => updateRule('roleInstructions', e.target.value)}
                 />
+                <small style={{color:'#666',fontSize:'0.78rem',marginTop:'0.2rem',display:'block'}}>
+                  💡 提示：您在此处输入的内容将 100% 完整体现在最终 Prompt 的【地块结构与参考图】中，完全由您决定，系统绝不写死套话覆盖。
+                </small>
               </label>
 
               <label className="rule-field">
