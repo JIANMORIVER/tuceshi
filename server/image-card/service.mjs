@@ -53,6 +53,15 @@ export function buildAuditReport({ record, input, generated, error }) {
       status_code: httpStatus,
       content_type: contentType
     },
+    network_meta: {
+      ...(error?.details?.underlyingErrorCode ? { underlying_error_code: error.details.underlyingErrorCode } : {}),
+      ...(error?.details?.errorCategory ? { error_category: error.details.errorCategory } : {}),
+      stage: error?.details?.stage || (generated ? "completed" : "unknown"),
+      elapsed_ms: error?.details?.elapsedMs || generated?.networkMeta?.elapsedMs || record?.elapsedMs || 0,
+      proxy_used: Boolean(error?.details?.proxyUsed ?? generated?.networkMeta?.proxyUsed),
+      ...(error?.details?.proxyEndpoint || generated?.networkMeta?.proxyEndpoint ? { proxy_endpoint: error?.details?.proxyEndpoint || generated?.networkMeta?.proxyEndpoint } : {}),
+      ...(error?.details?.targetHost || generated?.networkMeta?.targetHost ? { target_host: error?.details?.targetHost || generated?.networkMeta?.targetHost } : {})
+    },
     ...(error ? { backend_error_code: error.code || "MODEL_REQUEST_FAILED" } : {}),
     ...(error?.details?.providerCode ? { provider_raw_error_code: error.details.providerCode } : {}),
     ...(reqId ? { request_id: reqId } : {}),

@@ -40,9 +40,19 @@ export function readImageConfig(env = loadImageEnv()) {
   let url; try { url = new URL(baseUrl); } catch { badConfig("生图 Base URL 无效。"); }
   const expected = region === "beijing" ? /^(dashscope\.aliyuncs\.com|[a-zA-Z0-9-]+\.cn-beijing\.maas\.aliyuncs\.com)$/ : /^(dashscope-intl\.aliyuncs\.com|[a-zA-Z0-9-]+\.ap-southeast-1\.maas\.aliyuncs\.com)$/;
   if (url.protocol !== "https:" || !expected.test(url.hostname) || url.port || url.username || url.password || url.pathname !== "/" || url.search || url.hash) badConfig("Base URL 必须为所选地域的官方 DashScope 域名根地址，不要填写文本模型兼容接口地址。");
-  return { provider, model, region, baseUrl, size, width, height, timeoutMs, maxImages, mode, enabled, apiKey };
+  const proxy = (env.LIFE_MAP_IMAGE_PROXY || env.HTTPS_PROXY || env.HTTP_PROXY || env.https_proxy || env.http_proxy || env.ALL_PROXY || env.all_proxy || "").trim();
+  return { provider, model, region, baseUrl, size, width, height, timeoutMs, maxImages, mode, enabled, apiKey, proxy };
 }
 export function publicImageConfig(config) {
-  const { apiKey, ...safe } = config;
-  return { ...safe, apiConfigured: Boolean(apiKey), realReady: Boolean(apiKey) && config.enabled, accountAccess: "unverified" };
+  const { apiKey, proxy, ...safe } = config;
+  let safeProxy;
+  if (proxy) {
+    try {
+      const u = new URL(proxy);
+      safeProxy = `${u.protocol}//${u.host}`;
+    } catch {
+      safeProxy = "configured";
+    }
+  }
+  return { ...safe, proxyConfigured: Boolean(proxy), proxy: safeProxy, apiConfigured: Boolean(apiKey), realReady: Boolean(apiKey) && config.enabled, accountAccess: "unverified" };
 }
