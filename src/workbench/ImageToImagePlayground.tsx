@@ -5,7 +5,12 @@ import {
   type ReferenceImageRole,
   type ImageToImageRules
 } from '../domain/experiment-rules.js';
-import { compressAndScaleImage } from '../domain/workbench-storage.js';
+import {
+  compressAndScaleImage,
+  deepDehydrateObject,
+  deepRehydrateObject,
+  saveWorkbenchBlob
+} from '../domain/workbench-storage.js';
 import type { LabConfig } from './flow.js';
 
 interface ImageToImagePlaygroundProps {
@@ -35,14 +40,21 @@ export const ImageToImagePlayground: React.FC<ImageToImagePlaygroundProps> = ({
         referenceImages: lab.referenceImages,
         i2iRules: lab.i2iRules
       };
-      localStorage.setItem(I2I_PRESET_STORAGE_KEY, JSON.stringify(data));
+      const { dehydrated, largeBlobs } = deepDehydrateObject(data);
+      for (const item of largeBlobs) {
+        void saveWorkbenchBlob(item.id, item.dataUrl);
+      }
+      try {
+        localStorage.removeItem(I2I_PRESET_STORAGE_KEY);
+      } catch {}
+      localStorage.setItem(I2I_PRESET_STORAGE_KEY, JSON.stringify(dehydrated));
       alert('已成功将当前参考图与图生图规则保存为本机常用预设！');
     } catch {
       alert('保存失败：图片体积可能超出浏览器缓存限制，建议使用“导出配置 JSON”。');
     }
   };
 
-  const loadDefaultPreset = () => {
+  const loadDefaultPreset = async () => {
     try {
       const raw = localStorage.getItem(I2I_PRESET_STORAGE_KEY);
       if (!raw) {
@@ -50,10 +62,11 @@ export const ImageToImagePlayground: React.FC<ImageToImagePlaygroundProps> = ({
         return;
       }
       const data = JSON.parse(raw);
+      const rehydrated = await deepRehydrateObject(data);
       onUpdateLab({
         mode: 'image_to_image',
-        referenceImages: Array.isArray(data.referenceImages) ? data.referenceImages : [],
-        i2iRules: data.i2iRules ? { ...lab.i2iRules, ...data.i2iRules } : lab.i2iRules
+        referenceImages: Array.isArray(rehydrated.referenceImages) ? rehydrated.referenceImages : [],
+        i2iRules: rehydrated.i2iRules ? { ...lab.i2iRules, ...rehydrated.i2iRules } : lab.i2iRules
       });
       alert('已成功载入本机常用图生图预设！');
     } catch {

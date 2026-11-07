@@ -280,3 +280,34 @@ test('V0.7.1 验收项 6：持久化底层真正损坏时如实阻断生图，�
   assert.equal(generateCalls.length, 0);
   assert.equal(workbench.state.stage, 'inquiry');
 });
+
+test('V0.7.1 验收项 7：浏览器环境下底层配额彻底耗尽时，SafeWorkbenchStorage 平滑降级为内存承载且不抛异常阻断生图', () => {
+  // 模拟全满且无法写入任何新数据的原生 LocalStorage
+  const fullStorage = {
+    getItem: () => null,
+    setItem: () => {
+      const err = new Error('Failed to execute setItem on Storage: Setting the value of key exceeded the quota.');
+      err.name = 'QuotaExceededError';
+      err.code = 22;
+      throw err;
+    },
+    removeItem: () => {}
+  };
+
+  // 模拟浏览器环境
+  const originalWindow = globalThis.window;
+  try {
+    globalThis.window = {};
+    const safeStorage = new SafeWorkbenchStorage(fullStorage);
+
+    // 写入任何内容，SafeWorkbenchStorage 捕获并平滑降级，绝不抛出异常阻断用户
+    assert.doesNotThrow(() => {
+      safeStorage.setItem('test-full-key', JSON.stringify({ version: 1, text: 'hello' }));
+    });
+
+    // 从内存中读取正常读取
+    assert.equal(safeStorage.getItem('test-full-key'), JSON.stringify({ version: 1, text: 'hello' }));
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
