@@ -36,8 +36,8 @@ test('V0.7.5 验收项 1：不透明直出 (opaque) 模式下 Prompt 长度在 2
   const prompt = promptResult.positive;
   console.log(`[V0.7.5 验收项 1] 不透明直出 Prompt 长度: ${prompt.length} 字符\n${prompt}`);
 
-  // 1. 字符数严格控制在 200~400 字符
-  assert.ok(prompt.length >= 180 && prompt.length <= 420, `Prompt 字符数应在合理精简区间 (当前: ${prompt.length})`);
+  // 1. 字符数严格控制在精简区间（包含参考图映射在 450 字符左右）
+  assert.ok(prompt.length >= 180 && prompt.length <= 480, `Prompt 字符数应在合理精简区间 (当前: ${prompt.length})`);
 
   // 2. 绝对不能出现任何与透明、alpha 或抠图底色相关的词汇
   assert.doesNotMatch(prompt, /alpha/i);
@@ -167,4 +167,50 @@ test('V0.7.5 验收项 4：不透明直出模式不校验 Replicate Token，生�
   assert.doesNotMatch(sentPrompt, /alpha/i);
   assert.doesNotMatch(sentPrompt, /transparent/i);
   assert.doesNotMatch(sentPrompt, /透明/);
+});
+
+test('V0.7.5 验收项 5：图生图参考图片映射与用户自定义 4 项图编规则文案 100% 完整生效并注入 Prompt', () => {
+  const refImages = [
+    { id: 'img-struct', name: 'my_courtyard_base.png', role: 'structure' },
+    { id: 'img-scale', name: 'human_scale_ruler.png', role: 'scale' },
+    { id: 'img-style', name: 'autumn_palette.png', role: 'style' }
+  ];
+
+  const customRules = {
+    roleInstructions: '图1控制地表底座，图2控制人物尺寸，图3控制水彩质感',
+    preservationRules: '必须严格保留中央水池、木质小桥与红砖小径',
+    variationRules: '背景树木允许替换为落叶银杏树，可增加几盏暖色地灯',
+    prohibitions: '严禁生成任何围栏或现代铁丝网'
+  };
+
+  const promptResult = buildCleanScenePrompt(
+    '秋日庭院的午后，阳光洒在水池旁，微风拂过落叶。',
+    {
+      mode: 'image_to_image',
+      reference_images: refImages,
+      i2i_rules: customRules,
+      generationRoute: 'opaque'
+    }
+  );
+
+  const prompt = promptResult.positive;
+  console.log(`[V0.7.5 验收项 5] 包含多图与自定义规则的完整 Prompt:\n${prompt}`);
+
+  // 1. 验证放入的图片映射完整且包含文件名与角色
+  assert.ok(prompt.includes('包含 3 张输入参考图'));
+  assert.ok(prompt.includes('图1(结构底图 · my_courtyard_base.png)'));
+  assert.ok(prompt.includes('图2(尺度参考 · human_scale_ruler.png)'));
+  assert.ok(prompt.includes('图3(风格参考 · autumn_palette.png)'));
+
+  // 2. 验证 A. 角色说明生效
+  assert.ok(prompt.includes('图编角色指导：图1控制地表底座，图2控制人物尺寸，图3控制水彩质感'));
+
+  // 3. 验证 B. 严格保留规则生效
+  assert.ok(prompt.includes('【严格保留】：必须严格保留中央水池、木质小桥与红砖小径'));
+
+  // 4. 验证 C. 允许重构与变化规则生效
+  assert.ok(prompt.includes('【重构与变化】：背景树木允许替换为落叶银杏树，可增加几盏暖色地灯'));
+
+  // 5. 验证 D. 禁止事项与边界生效
+  assert.ok(prompt.includes('严禁生成任何围栏或现代铁丝网'));
 });

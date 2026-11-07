@@ -405,7 +405,10 @@ export function breakdownPromptSegments(options: {
     structureContent = `${DEFAULT_STRUCTURE_RULES}`;
   }
   if (structImgs.length > 0) {
-    structureContent += '\n【结构图规则】：决定地块形状、等距菱形轮廓与道路连接口走向，严禁复制参考图内的具体纹理或UI。严格遵循结构参考图的地块外形、基本视角与道路连接口。结构图中的每个黑色标记，都必须转化为指定边缘上的自然道路出口；道路必须延伸至地块边缘，允许穿过围墙或边缘装饰，但不能改变整体轮廓；禁止只在地块内部生成道路却没有实际连接到边缘；不同场景允许使用不同道路材质；严禁复制参考图边框或UI。';
+    structureContent += '\n【结构图规则】：决定地块形状、等距菱形轮廓与道路连接口走向，严禁复制参考图内的具体纹理或UI。严格遵循结构参考图的地块外形、基本视角与道路连接口。结构图中的每个红色标记，都必须转化为指定边缘上的自然道路出口；道路必须延伸至地块边缘，允许穿过围墙或边缘装饰，但不能改变整体轮廓；禁止只在地块内部生成道路却没有实际连接到边缘；不同场景允许使用不同道路材质；严禁复制参考图边框或UI。';
+  }
+  if (options.i2iRules?.preservationRules?.trim()) {
+    structureContent += `\n【严格保留】：${options.i2iRules.preservationRules.trim()}`;
   }
   const module1: PromptModuleDetail = {
     id: 'structure',
@@ -428,7 +431,10 @@ export function breakdownPromptSegments(options: {
     ? `画面中必须清楚呈现${options.primarySubject.trim()}。`
     : '';
   const surfaceClause = options.groundSurfaceName ? `地面材质为${options.groundSurfaceName}。` : '';
-  const sceneClause = `${subjectPrefix}${cleanDesc}${surfaceClause}场景细节紧扣生活日记事实展开，主景占据主要视觉面积，不画空白无主体地面。`.trim();
+  let sceneClause = `${subjectPrefix}${cleanDesc}${surfaceClause}场景细节紧扣生活日记事实展开，主景占据主要视觉面积，不画空白无主体地面。`.trim();
+  if (options.i2iRules?.variationRules?.trim()) {
+    sceneClause += `\n【重构与变化】：${options.i2iRules.variationRules.trim()}`;
+  }
   const module2: PromptModuleDetail = {
     id: 'scene',
     name: '场景主体与日记内容',
@@ -478,11 +484,13 @@ export function breakdownPromptSegments(options: {
     stylePackage: options.stylePackage,
     mode: options.mode
   });
+  const userProhibit = options.i2iRules?.prohibitions?.trim();
+  const prohibitSuffix = userProhibit ? ` 边界禁止：${userProhibit}。` : '';
   let transClause = '';
   if (options.isNativeAlpha) {
-    transClause = `整个菱形底座与场景主体、内部生活场景全部保留且不透明，仅地块外部完全透明，无白底、黑底、彩色底、棋盘格、天空或外部投影。The image has alpha channel and the background is transparent. 只画插画，任何位置都不要文字、字母、数字、日记、标题、说明卡片、UI 或水印。避免：${negativeText}。`;
+    transClause = `整个菱形底座与场景主体、内部生活场景全部保留且不透明，仅地块外部完全透明，无白底、黑底、彩色底、棋盘格、天空或外部投影。The image has alpha channel and the background is transparent. 只画插画，任何位置都不要文字、字母、数字、日记、标题、说明卡片、UI 或水印。避免：${negativeText}。${prohibitSuffix}`;
   } else {
-    transClause = `地块外为均匀 RGB(255,255,255) 纯白背景，无投影、渐变或棋盘格。只画插画，任何位置都不要文字、字母、数字、日记、标题、说明卡片、UI 或水印。避免：${negativeText}。`;
+    transClause = `地块外为均匀 RGB(255,255,255) 纯白背景，无投影、渐变或棋盘格。只画插画，任何位置都不要文字、字母、数字、日记、标题、说明卡片、UI 或水印。避免：${negativeText}。${prohibitSuffix}`;
   }
   const module5: PromptModuleDetail = {
     id: 'transparency_and_negatives',

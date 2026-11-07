@@ -380,66 +380,109 @@ export function buildCleanScenePrompt(description, options = {}) {
   const refImages = Array.isArray(options.referenceImages) ? options.referenceImages : (Array.isArray(options.reference_images) ? options.reference_images : []);
   const i2iRules = options.i2iRules || options.i2i_rules;
   const stylePkg = options.stylePackage || options.style_package;
+  const isI2I = options.mode === 'image_to_image' || refImages.length > 0;
+
+  // 用户在图生图实验场填写的 4 个规则文案（实时响应用户编辑）
+  const userRoleInst = i2iRules?.roleInstructions?.replace(/黑色标记/g, '红色标记')?.trim();
+  const userPreserve = i2iRules?.preservationRules?.trim();
+  const userVariation = i2iRules?.variationRules?.trim();
+  const userProhibit = i2iRules?.prohibitions?.trim();
 
   const structImgs = refImages.filter(img => img?.role === 'structure');
   const scaleImgs = refImages.filter(img => img?.role === 'scale');
   const styleImgs = refImages.filter(img => img?.role === 'style');
+  const contentImgs = refImages.filter(img => img?.role === 'content');
 
-  // 1. 地块结构与连接口 (structure)
-  let structText = '等距正方形菱形地块，薄而平整的等厚底座，边沿平直平整，便于拼接';
-  if (structImgs.length > 0) {
-    structText = '严格遵循结构参考图的地块外形、基本视角与道路连接口，结构图中的红色标记对应相邻地块的自然道路出口，道路必须延伸至地块边缘，严禁复制参考图边框或UI';
-  } else if (i2iRules?.roleInstructions && i2iRules.roleInstructions.includes('结构')) {
-    structText = i2iRules.roleInstructions.replace(/黑色标记/g, '红色标记').trim();
+  // 1. 地块结构与参考图映射 (structure)
+  let structLines = [];
+  if (refImages.length > 0) {
+    const roleSummary = userRoleInst ? `（图编角色指导：${userRoleInst}）` : '';
+    structLines.push(`包含 ${refImages.length} 张输入参考图${roleSummary}：`);
+    refImages.forEach((img, idx) => {
+      const num = idx + 1;
+      const role = img.role || 'structure';
+      const name = img.name ? ` · ${img.name}` : '';
+      if (role === 'structure') {
+        structLines.push(`- 图${num}(结构底图${name})：严格遵循结构参考图的地块外形、基本视角与道路连接口，结构图中的每个红色标记，都必须转化为指定边缘上的自然道路出口，对应相邻地块的自然道路出口，道路必须延伸至地块边缘，严禁复制参考图边框或UI`);
+      } else if (role === 'scale') {
+        structLines.push(`- 图${num}(尺度参考${name})：严格以尺度参考图为准，控制人物、建筑、树木、道路与生活物件的相对大小与比例尺，微观箱景比例自然，严格禁止借用其画风、材质或色彩，不影响画面风格`);
+      } else if (role === 'style') {
+        structLines.push(`- 图${num}(风格参考${name})：【风格图画法指导】参考其绘画笔触、线条、色块、材质质感、配色与细节密度，仅学习其艺术画法；严禁复制参考图内的具体建筑、主体造型、构图、文字、UI或拼图标记`);
+      } else if (role === 'content') {
+        structLines.push(`- 图${num}(内容参考${name})：参考其特定物件或建筑造型的视觉外观`);
+      } else {
+        structLines.push(`- 图${num}(参考图${name})：提供局部视觉参考`);
+      }
+    });
+  } else if (isI2I && userRoleInst) {
+    structLines.push(`图编角色指导：${userRoleInst}`);
+  } else {
+    structLines.push('等距正方形菱形地块，薄而平整的等厚底座，边沿平直平整，便于拼接');
   }
+
+  // 注入用户配置的严格保留规则 (B. 严格保留规则)
+  if (userPreserve) {
+    structLines.push(`【严格保留】：${userPreserve}`);
+  }
+  const structText = structLines.join('\n');
 
   // 2. 场景主体与生活内容 (scene)
   const cleanScene = description
     .replace(/(厚重|厚实|高耸|巨大)的?(底座|基座|土壤剖面|台阶悬空)/g, '')
     .replace(/纯白外背景|纯白背景|外部纯白|白色背景|透明外背景|透明背景/g, '')
     .trim();
-  const sceneText = `画面中清楚呈现${cleanScene}`;
+  let sceneLines = [`画面中清楚呈现${cleanScene}`];
+  // 注入用户配置的允许变化规则 (C. 允许重构与变化规则)
+  if (userVariation) {
+    sceneLines.push(`【重构与变化】：${userVariation}`);
+  }
+  const sceneText = sceneLines.join('\n');
 
   // 3. 相对尺度 (scale)
   let scaleText = '物体与建筑保持等距像素插画的标准比例尺，房屋、树木、生活物件与人物相对大小自然协调';
   if (scaleImgs.length > 0) {
-    scaleText = '严格以尺度参考图为准，控制人物、建筑、树木、道路与生活物件的相对大小与比例尺，微观箱景比例自然，严格禁止借用其画风、材质或色彩，不影响画面风格';
+    scaleText = '严格以尺度参考图为准，微观箱景比例自然协调，严格禁止借用其画风、材质或色彩，不影响画面风格';
   }
 
   // 4. 纯画风说明 (style)
   const rawStyle = options.style?.trim() || stylePkg?.style_text_rules?.trim() || stylePkg?.style_prompt?.trim() || STYLE;
   let styleText = sanitizeCoreArtStyle(rawStyle);
-  if (styleImgs.length > 0) {
+  if (styleImgs.length > 0 && !structText.includes('【风格图画法指导】')) {
     styleText += '。【风格图画法指导】：参考笔触、线条、色块与色彩质感，严禁复制参考图内的具体建筑、主体、文字或UI。';
   }
 
   // 5. 核心限制与外背景 (transparency_and_negatives)
-  let transText = '画面主体完整，无任何文字、字母、数字、标题、说明卡片、UI或水印，非写实3D';
+  let transParts = [];
   if (isAlpha) {
-    transText = '整个菱形底座与场景主体全部保留且不透明，仅地块外部完全透明(The image has alpha channel and the background is transparent)，无白底、黑底或外部投影，' + transText;
+    transParts.push('整个菱形底座与场景主体全部保留且不透明，仅地块外部完全透明(The image has alpha channel and the background is transparent)，无白底、黑底或外部投影');
   } else if (!isOpaque) {
-    transText = '地块外部为RGB(255,255,255)纯白背景，' + transText;
+    transParts.push('地块外部为RGB(255,255,255)纯白背景');
   }
-  // isOpaque 模式下：绝无“透明”、“alpha”、“RGBA”或纯白背景要求！
+  // 注入用户配置的禁止规则 (D. 禁止事项与边界)
+  if (userProhibit) {
+    transParts.push(userProhibit);
+  }
+  transParts.push('画面主体完整，无任何文字、字母、数字、标题、说明卡片、UI或水印，非写实3D');
+  const transText = transParts.join('；');
 
   // 组装最终正向 Prompt
   const parts = [];
   if (isAlpha) {
     parts.push('This is an RGBA image with transparency.');
   }
-  parts.push(`【地块结构】${structText}。`);
-  parts.push(`【场景构图】${sceneText}。`);
-  parts.push(`【相对尺度】${scaleText}。`);
-  parts.push(`【艺术画风】${styleText}`);
-  parts.push(`【禁止事项】${transText}。`);
+  parts.push(`【地块结构与参考图】\n${structText}。`);
+  parts.push(`【场景构图】\n${sceneText}。`);
+  parts.push(`【相对尺度】\n${scaleText}。`);
+  parts.push(`【艺术画风】\n${styleText}`);
+  parts.push(`【核心限制】\n${transText}。`);
 
   const positive = parts.join('\n\n');
 
-  const mod1 = { id: 'structure', name: '地块结构与连接口', content: `【地块结构】${structText}。`, char_count: structText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
-  const mod2 = { id: 'scene', name: '场景主体与生活内容', content: `【场景构图】${sceneText}。`, char_count: sceneText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
-  const mod3 = { id: 'scale', name: '相对尺度规范', content: `【相对尺度】${scaleText}。`, char_count: scaleText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
-  const mod4 = { id: 'style', name: '艺术风格规范', content: `【艺术画风】${styleText}`, char_count: styleText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
-  const mod5 = { id: 'transparency_and_negatives', name: '核心限制与外背景', content: `【禁止事项】${transText}。`, char_count: transText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
+  const mod1 = { id: 'structure', name: '地块结构与连接口', content: `【地块结构与参考图】\n${structText}。`, char_count: structText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
+  const mod2 = { id: 'scene', name: '场景主体与生活内容', content: `【场景构图】\n${sceneText}。`, char_count: sceneText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
+  const mod3 = { id: 'scale', name: '相对尺度规范', content: `【相对尺度】\n${scaleText}。`, char_count: scaleText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
+  const mod4 = { id: 'style', name: '艺术风格规范', content: `【艺术画风】\n${styleText}`, char_count: styleText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
+  const mod5 = { id: 'transparency_and_negatives', name: '核心限制与外背景', content: `【核心限制】\n${transText}。`, char_count: transText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
   const modules = [mod1, mod2, mod3, mod4, mod5];
 
   return {
@@ -448,7 +491,7 @@ export function buildCleanScenePrompt(description, options = {}) {
     scene: cleanScene,
     boundaries: isAlpha ? '单张完整场景；透明外背景；Alpha 与锚点待验证' : (isOpaque ? '单张完整场景；普通有底图不透明直出（未调用851LAB）' : '单张完整场景；纯白外背景'),
     positive,
-    negative: isAlpha ? '' : '文字，数字，字母，UI，卡框，水印，3D写实',
+    negative: isAlpha ? '' : (options.negativeRules || options.negative || '文字，数字，字母，UI，卡框，水印，3D写实'),
     modules,
     estimatedTokens: estimateTokens(positive),
     segments: {
