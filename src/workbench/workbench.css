@@ -301,5 +301,7 @@
 .action-summary{font-size:13px;color:#374b33}
 .hint-text{color:#7a8a76;font-size:12px}
 .action-buttons{display:flex;gap:10px}
+.retry-btn{background:#edf4eb;border-color:#5a8a4f;color:#244c1c;font-weight:600}
+.retry-btn:hover:not(:disabled){background:#dbe9d7}
 
 

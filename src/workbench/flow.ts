@@ -25,8 +25,16 @@ import {
   exportDiaryInputSnapshot,
   validateAndParseDiarySnapshot
 } from '../domain/diary-snapshot.js';
+import {
+  SafeWorkbenchStorage,
+  isQuotaExceededError,
+  dehydrateExperiment,
+  rehydrateExperiment,
+  saveWorkbenchBlob
+} from '../domain/workbench-storage.js';
 
 export const STORAGE_KEY='life-map.image-workbench.v1';
+export type { ReferenceImage, ImageToImageRules, StylePackage, StyleReferenceImage } from '../domain/experiment-rules.js';
 export type Stage='write'|'focus'|'inquiry'|'results'|'selected';
 export type Candidate={
   id: string;
@@ -120,8 +128,11 @@ export function collectAnswers(exp:Experiment):UserSupplementalAnswer[]{
 export class Workbench {
  private listeners=new Set<()=>void>();private submitting=new Set<string>();private working=false;
  state:Experiment;busy=false;error='';
+ readonly safeStorage: SafeWorkbenchStorage;
+
  constructor(readonly storage:Storage,readonly api:Api=new WorkbenchApi()){
-  const raw=storage.getItem(STORAGE_KEY);this.state=freshExperiment();
+  this.safeStorage = storage instanceof SafeWorkbenchStorage ? storage : new SafeWorkbenchStorage(storage);
+  const raw=this.safeStorage.getItem(STORAGE_KEY);this.state=freshExperiment();
   if(raw){
     try{
       const value=JSON.parse(raw);
@@ -135,6 +146,13 @@ export class Workbench {
         };
       }
       this.state=value;
+      // 异步重水化 IndexedDB 中转存的大图
+      void rehydrateExperiment(value).then(hydrated => {
+        if (hydrated !== this.state) {
+          this.state = hydrated;
+          this.emit();
+        }
+      });
     }catch{
       this.error='上次实验记录无法读取，已保留原始缓存。请先导出缓存备份或新建实验。';
     }
@@ -142,7 +160,11 @@ export class Workbench {
  }
  subscribe=(fn:()=>void)=>{this.listeners.add(fn);return()=>{this.listeners.delete(fn);};};
  private emit(){this.listeners.forEach(fn=>fn());}
- private save(next:Experiment){this.storage.setItem(STORAGE_KEY,JSON.stringify(next));this.state=next;this.emit();}
+ private save(next:Experiment){
+  this.safeStorage.setItem(STORAGE_KEY,JSON.stringify(next));
+  this.state=next;
+  this.emit();
+ }
  edit(patch:Partial<Experiment>){this.save({...this.state,...patch});}
 
  syncModelSettings(settings: PublicModelSettings) {
@@ -503,6 +525,18 @@ export class Workbench {
    void this.syncToArchive();
   }catch(error){this.patchCandidate(id,{status:'unknown',error:(error instanceof Error?error.message:'提交状态未知')+'；不自动重提，可查询原任务。'});}
   finally{this.submitting.delete(candidate.submissionId);}
+ }
+  async retrySubmit(id: string) {
+   const candidate = this.candidate(id);
+   if (this.submitting.has(candidate.submissionId)) return;
+   await this.task(async () => {
+    this.patchCandidate(id, {
+     submissionId: crypto.randomUUID(),
+     status: 'not_started',
+     error: undefined
+    });
+    await this.submit(id);
+   });
  }
  async regenerateWithLab(candidateId?: 'candidate_1'|'candidate_2'){
   const targetId = candidateId || this.state.lab?.frozenCandidateId || 'candidate_1';

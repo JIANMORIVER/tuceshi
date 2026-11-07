@@ -14,6 +14,7 @@ import {
   loadPresetOverrides,
   savePresetOverride
 } from '../domain/style-storage.js';
+import { compressAndScaleImage } from '../domain/workbench-storage.js';
 import type { LabConfig } from './flow.js';
 
 interface StylePlaygroundProps {
@@ -113,24 +114,17 @@ export const StylePlayground: React.FC<StylePlaygroundProps> = ({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const readPromises = Array.from(files).map((file) => {
-      return new Promise<StyleReferenceImage>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = ev => {
-          const dataUrl = ev.target?.result as string;
-          resolve({
-            id: `style-img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            name: file.name,
-            dataUrl,
-            role: 'style',
-            enabled: true,
-            order: currentImages.length,
-            sizeBytes: file.size
-          });
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+    const readPromises = Array.from(files).map(async (file) => {
+      const { dataUrl, sizeBytes } = await compressAndScaleImage(file);
+      return {
+        id: `style-img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: file.name,
+        dataUrl,
+        role: 'style' as const,
+        enabled: true,
+        order: currentImages.length,
+        sizeBytes
+      };
     });
 
     Promise.all(readPromises).then(newImgs => {
@@ -149,29 +143,30 @@ export const StylePlayground: React.FC<StylePlaygroundProps> = ({
     replaceImgInputRef.current?.click();
   };
 
-  const handleExecuteReplace = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExecuteReplace = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !replaceTargetImgId) return;
 
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const dataUrl = ev.target?.result as string;
+    try {
+      const { dataUrl, sizeBytes } = await compressAndScaleImage(file);
       const nextImgs = currentImages.map(img => {
         if (img.id === replaceTargetImgId) {
           return {
             ...img,
             name: file.name,
             dataUrl,
-            sizeBytes: file.size
+            sizeBytes
           };
         }
         return img;
       });
       void updateCurrentStyleImages(nextImgs);
+    } catch (err: any) {
+      alert(`替换图片失败：${err.message || '未知错误'}`);
+    } finally {
       setReplaceTargetImgId(null);
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+      e.target.value = '';
+    }
   };
 
   // 删除某张参考图

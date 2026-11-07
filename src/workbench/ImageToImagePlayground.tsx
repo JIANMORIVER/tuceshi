@@ -5,6 +5,7 @@ import {
   type ReferenceImageRole,
   type ImageToImageRules
 } from '../domain/experiment-rules.js';
+import { compressAndScaleImage } from '../domain/workbench-storage.js';
 import type { LabConfig } from './flow.js';
 
 interface ImageToImagePlaygroundProps {
@@ -126,18 +127,17 @@ export const ImageToImagePlayground: React.FC<ImageToImagePlaygroundProps> = ({
         ? (existingRoles.includes('scale') ? 'style' : 'scale')
         : 'structure';
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result as string;
+      void compressAndScaleImage(file).then(({ dataUrl, sizeBytes }) => {
         onAddReferenceImage({
           id: `ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           name: file.name,
           role: initialRole,
           dataUrl,
-          sizeBytes: file.size
+          sizeBytes
         });
-      };
-      reader.readAsDataURL(file);
+      }).catch(() => {
+        alert('读取图片失败，请检查文件格式。');
+      });
     }
 
     if (fileInputRef.current) fileInputRef.current.value = '';

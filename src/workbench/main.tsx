@@ -184,7 +184,18 @@ function App(){
     {images[candidate.id]?.failed&&images[candidate.id]?.url===candidate.job?.image_url&&<p role="alert">图片未加载，暂不能选择。<button onClick={()=>setImages(old=>({...old,[candidate.id]:{...old[candidate.id],failed:false,reload:(old[candidate.id]?.reload||0)+1}}))}>重新加载图片</button></p>}
 
     <div className="actions">
-     {candidate.status==='not_started'?<button disabled={flow.busy} onClick={()=>run(()=>flow.submit(candidate.id))}>明确提交此方案{e.provider==='mock'?'模拟图':'生图'}</button>:<button disabled={flow.busy} onClick={()=>run(()=>flow.query(candidate.id))}>查询原任务（不重新生图）</button>}
+     {candidate.status==='not_started'?(
+      <button disabled={flow.busy} onClick={()=>run(()=>flow.submit(candidate.id))}>明确提交此方案{e.provider==='mock'?'模拟图':'生图'}</button>
+     ):(
+      <>
+       <button disabled={flow.busy} onClick={()=>run(()=>flow.query(candidate.id))}>查询原任务（不重新生图）</button>
+       {candidate.status==='unknown'&&!candidate.job&&(
+        <button type="button" className="button secondary retry-btn" disabled={flow.busy} onClick={()=>run(()=>flow.retrySubmit(candidate.id))}>
+         🔄 重新提交生图
+        </button>
+       )}
+      </>
+     )}
      <button
       type="button"
       className={isFrozen ? 'secondary active' : 'secondary'}
