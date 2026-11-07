@@ -5,7 +5,7 @@ export interface PublicModelSettings {
   image: { model: string; apiConfigured: boolean; size: string };
   secretLifetime: string;
   vision?: { model: string; apiConfigured: boolean };
-  generationRoute?: 'legacy-local' | 'native-alpha' | 'qwen-851';
+  generationRoute?: 'legacy-local' | 'native-alpha' | 'opaque' | 'qwen-851';
   nativeImageModel?: string;
   backgroundRemoval?: {provider:string;model:string;apiConfigured:boolean};
   authRequired?: boolean;

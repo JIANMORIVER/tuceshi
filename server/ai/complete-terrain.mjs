@@ -112,7 +112,7 @@ export function buildCompleteScenePrompt(description, options={}) {
   // Module 1: 地块结构与连接口（保留核心几何参数，强化道路出口约束）
   let structureText = options.groundRules?.trim() || GROUND_RULES;
   if (structImgs.length > 0) {
-    structureText += '\n【结构图规则】：决定地块形状、等距菱形轮廓与道路连接口走向，严禁复制参考图内的具体纹理或UI。严格遵循结构参考图的地块外形、基本视角与道路连接口。结构图中的每个黑色标记，都必须转化为指定边缘上的自然道路出口；道路必须延伸至地块边缘，允许穿过围墙或边缘装饰，但不能改变整体轮廓；禁止只在地块内部生成道路却没有实际连接到边缘；不同场景允许使用不同道路材质；严禁复制参考图边框或UI。';
+    structureText += '\n【结构图规则】：决定地块形状、等距菱形轮廓与道路连接口走向，严禁复制参考图内的具体纹理或UI。严格遵循结构参考图的地块外形、基本视角与道路连接口。结构图中的每个红色标记，都必须转化为指定边缘上的自然道路出口，对应相邻地块的自然道路出口，道路必须延伸至地块边缘，允许穿过围墙或边缘装饰，但不能改变整体轮廓；禁止只在地块内部生成道路却没有实际连接到边缘；不同场景允许使用不同道路材质；严禁复制参考图边框或UI。';
   }
   if (i2iSection) {
     structureText += i2iSection;
@@ -242,7 +242,7 @@ export function buildNativeScenePrompt(description, options={}) {
   // Module 1: 地块结构与连接口（保留核心几何参数，强化道路出口约束）
   let structureText = options.groundRules?.trim() || GROUND_RULES;
   if (structImgs.length > 0) {
-    structureText += '\n【结构图规则】：决定地块形状、等距菱形轮廓与道路连接口走向，严禁复制参考图内的具体纹理或UI。严格遵循结构参考图的地块外形、基本视角与道路连接口。结构图中的每个黑色标记，都必须转化为指定边缘上的自然道路出口；道路必须延伸至地块边缘，允许穿过围墙或边缘装饰，但不能改变整体轮廓；禁止只在地块内部生成道路却没有实际连接到边缘；不同场景允许使用不同道路材质；严禁复制参考图边框或UI。';
+    structureText += '\n【结构图规则】：决定地块形状、等距菱形轮廓与道路连接口走向，严禁复制参考图内的具体纹理或UI。严格遵循结构参考图的地块外形、基本视角与道路连接口。结构图中的每个红色标记，都必须转化为指定边缘上的自然道路出口，对应相邻地块的自然道路出口，道路必须延伸至地块边缘，允许穿过围墙或边缘装饰，但不能改变整体轮廓；禁止只在地块内部生成道路却没有实际连接到边缘；不同场景允许使用不同道路材质；严禁复制参考图边框或UI。';
   }
   if (i2iSection) {
     structureText += i2iSection;
@@ -347,10 +347,126 @@ export function buildNativeScenePrompt(description, options={}) {
     }
   };
 }
+/**
+ * 清洗并提炼核心画风，彻底剥离白墙黛瓦、灯笼、屋檐积雪等具体建筑题材干扰
+ */
+export function sanitizeCoreArtStyle(text = '') {
+  if (!text) return STYLE;
+  let cleaned = text
+    .replace(/(建筑)?白墙黛瓦[，、\s]*/g, '')
+    .replace(/(屋檐)?(积雪薄覆|积雪|薄雪|覆雪)[，、\s]*/g, '')
+    .replace(/(暖黄与朱红的)?(大红)?灯笼(高挂)?[，、\s]*/g, '')
+    .replace(/(马头墙|飞檐翘角|雕花窗栏)[，、\s]*/g, '')
+    .replace(/江南与徽派意境[，、\s]*/g, '')
+    .replace(/传统庭院[，、\s]*/g, '')
+    .replace(/(小桥流水|石桥、木亭与落叶)[，、\s]*/g, '')
+    .replace(/营造充满人情味的传统新春微观景致[。，\s]*/g, '')
+    .trim();
+  if (cleaned.length < 10) return STYLE;
+  return cleaned;
+}
+
+/**
+ * 统一极简 Prompt 编译器：四段式结构，严格控制在约 200～400 字符区间
+ * 1. 参考图角色（每类仅一句话，红色标记连接口）
+ * 2. 场景主体（日记真实转译）
+ * 3. 艺术画风（纯画风，不混入无关题材）
+ * 4. 核心限制（菱形地块/无文字/非3D；透明直出才写透明，不透明直出绝无透明词）
+ */
+export function buildCleanScenePrompt(description, options = {}) {
+  const route = options.generationRoute || options.route || 'native-alpha';
+  const isAlpha = (route === 'native-alpha');
+  const isOpaque = (route === 'opaque');
+  const refImages = Array.isArray(options.referenceImages) ? options.referenceImages : (Array.isArray(options.reference_images) ? options.reference_images : []);
+  const i2iRules = options.i2iRules || options.i2i_rules;
+  const stylePkg = options.stylePackage || options.style_package;
+
+  const structImgs = refImages.filter(img => img?.role === 'structure');
+  const scaleImgs = refImages.filter(img => img?.role === 'scale');
+  const styleImgs = refImages.filter(img => img?.role === 'style');
+
+  // 1. 地块结构与连接口 (structure)
+  let structText = '等距正方形菱形地块，薄而平整的等厚底座，边沿平直平整，便于拼接';
+  if (structImgs.length > 0) {
+    structText = '严格遵循结构参考图的地块外形、基本视角与道路连接口，结构图中的红色标记对应相邻地块的自然道路出口，道路必须延伸至地块边缘，严禁复制参考图边框或UI';
+  } else if (i2iRules?.roleInstructions && i2iRules.roleInstructions.includes('结构')) {
+    structText = i2iRules.roleInstructions.replace(/黑色标记/g, '红色标记').trim();
+  }
+
+  // 2. 场景主体与生活内容 (scene)
+  const cleanScene = description
+    .replace(/(厚重|厚实|高耸|巨大)的?(底座|基座|土壤剖面|台阶悬空)/g, '')
+    .replace(/纯白外背景|纯白背景|外部纯白|白色背景|透明外背景|透明背景/g, '')
+    .trim();
+  const sceneText = `画面中清楚呈现${cleanScene}`;
+
+  // 3. 相对尺度 (scale)
+  let scaleText = '物体与建筑保持等距像素插画的标准比例尺，房屋、树木、生活物件与人物相对大小自然协调';
+  if (scaleImgs.length > 0) {
+    scaleText = '严格以尺度参考图为准，控制人物、建筑、树木、道路与生活物件的相对大小与比例尺，微观箱景比例自然，严格禁止借用其画风、材质或色彩，不影响画面风格';
+  }
+
+  // 4. 纯画风说明 (style)
+  const rawStyle = options.style?.trim() || stylePkg?.style_text_rules?.trim() || stylePkg?.style_prompt?.trim() || STYLE;
+  let styleText = sanitizeCoreArtStyle(rawStyle);
+  if (styleImgs.length > 0) {
+    styleText += '。【风格图画法指导】：参考笔触、线条、色块与色彩质感，严禁复制参考图内的具体建筑、主体、文字或UI。';
+  }
+
+  // 5. 核心限制与外背景 (transparency_and_negatives)
+  let transText = '画面主体完整，无任何文字、字母、数字、标题、说明卡片、UI或水印，非写实3D';
+  if (isAlpha) {
+    transText = '整个菱形底座与场景主体全部保留且不透明，仅地块外部完全透明(The image has alpha channel and the background is transparent)，无白底、黑底或外部投影，' + transText;
+  } else if (!isOpaque) {
+    transText = '地块外部为RGB(255,255,255)纯白背景，' + transText;
+  }
+  // isOpaque 模式下：绝无“透明”、“alpha”、“RGBA”或纯白背景要求！
+
+  // 组装最终正向 Prompt
+  const parts = [];
+  if (isAlpha) {
+    parts.push('This is an RGBA image with transparency.');
+  }
+  parts.push(`【地块结构】${structText}。`);
+  parts.push(`【场景构图】${sceneText}。`);
+  parts.push(`【相对尺度】${scaleText}。`);
+  parts.push(`【艺术画风】${styleText}`);
+  parts.push(`【禁止事项】${transText}。`);
+
+  const positive = parts.join('\n\n');
+
+  const mod1 = { id: 'structure', name: '地块结构与连接口', content: `【地块结构】${structText}。`, char_count: structText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
+  const mod2 = { id: 'scene', name: '场景主体与生活内容', content: `【场景构图】${sceneText}。`, char_count: sceneText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
+  const mod3 = { id: 'scale', name: '相对尺度规范', content: `【相对尺度】${scaleText}。`, char_count: scaleText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
+  const mod4 = { id: 'style', name: '艺术风格规范', content: `【艺术画风】${styleText}`, char_count: styleText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
+  const mod5 = { id: 'transparency_and_negatives', name: '核心限制与外背景', content: `【禁止事项】${transText}。`, char_count: transText.length, duplicate_check: { has_internal_duplicates: false, duplicate_keywords: [] } };
+  const modules = [mod1, mod2, mod3, mod4, mod5];
+
+  return {
+    version: isAlpha ? NATIVE_SCENE_PROMPT_VERSION : (isOpaque ? 'isometric-opaque-direct-v1' : COMPLETE_SCENE_PROMPT_VERSION),
+    style: styleText,
+    scene: cleanScene,
+    boundaries: isAlpha ? '单张完整场景；透明外背景；Alpha 与锚点待验证' : (isOpaque ? '单张完整场景；普通有底图不透明直出（未调用851LAB）' : '单张完整场景；纯白外背景'),
+    positive,
+    negative: isAlpha ? '' : '文字，数字，字母，UI，卡框，水印，3D写实',
+    modules,
+    estimatedTokens: estimateTokens(positive),
+    segments: {
+      structure_rules: mod1.char_count,
+      scene_content: mod2.char_count,
+      scale_rules: mod3.char_count,
+      style_package: mod4.char_count,
+      transparency_rules: mod5.char_count,
+      i2i_reference_rules: refImages.length > 0 ? (mod1.char_count + mod3.char_count) : 0,
+      negative_prohibitions: isAlpha ? 0 : 25
+    }
+  };
+}
+
 export class CompleteTerrainGeneration {
   constructor(settings,{storageRoot=join(PROJECT_ROOT,'.local/terrain-candidates'),adapter}={}){this.settings=settings;this.storageRoot=storageRoot;this.adapter=adapter;this.queue=Promise.resolve();}
   service(config=this.settings.imageConfig(), labConfig={}){
-    const promptBuilder = (desc) => (config.generationRoute==='native-alpha' ? buildNativeScenePrompt(desc, labConfig) : buildCompleteScenePrompt(desc, labConfig));
+    const promptBuilder = (desc) => buildCleanScenePrompt(desc, { ...labConfig, generationRoute: config.generationRoute });
     return new ImageGenerationService(config,{storageRoot:this.storageRoot,promptBuilder,...(this.adapter?{adapter:this.adapter}:{})});
   }
   generate(input){

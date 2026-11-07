@@ -5,7 +5,7 @@ export function withTerrainBackground(listener,{pipeline,settings}={}){
   pipeline??=new RoutedTerrainPipeline({settings});
   return async function backgroundAwareRequest(req,res){
     const path=new URL(req.url,'http://localhost').pathname;
-    if(req.method==='GET'&&path==='/api/terrain-background/status'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({version:ROUTED_ALPHA_VERSION,legacyVersion:BACKGROUND_PIPELINE_VERSION,enabled:true,supportedRoutes:['native-alpha','qwen-851']}));return;}
+    if(req.method==='GET'&&path==='/api/terrain-background/status'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({version:ROUTED_ALPHA_VERSION,legacyVersion:BACKGROUND_PIPELINE_VERSION,enabled:true,supportedRoutes:['native-alpha','opaque','qwen-851']}));return;}
     if(req.method==='GET'&&path.startsWith('/api/terrain-cutouts/')){
       try{const bytes=await pipeline.image(path.slice('/api/terrain-cutouts/'.length));res.writeHead(200,{'content-type':'image/png','cache-control':'no-store','cross-origin-resource-policy':'same-origin','x-content-type-options':'nosniff'});res.end(bytes);}
       catch{res.writeHead(404,{'content-type':'application/json'});res.end(JSON.stringify({error:'透明图片尚未准备好，原图仍保留。'}));}return;

@@ -14,7 +14,7 @@ export function AiModelSettings({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const previous=document.activeElement as HTMLElement|null;
     if (dialog.current && !dialog.current.open) dialog.current.showModal();
-    void loadModelSettings(true).then(value=>setSettings({...value,generationRoute:value.generationRoute==='qwen-851'?'qwen-851':'native-alpha',nativeImageModel:value.nativeImageModel||'qwen-image-2.1-turbo'})).catch(cause=>setError(cause.message));
+    void loadModelSettings(true).then(value=>setSettings({...value,generationRoute:['qwen-851','opaque'].includes(value.generationRoute as any)?(value.generationRoute as any):'native-alpha',nativeImageModel:value.nativeImageModel||'qwen-image-2.1-turbo'})).catch(cause=>setError(cause.message));
     return ()=>{ previous?.focus({preventScroll:true}); };
   },[]);
   const save = async () => {
@@ -42,10 +42,13 @@ export function AiModelSettings({ onClose }: { onClose: () => void }) {
         <label>DeepSeek API Key<input type="password" autoComplete="off" value={deepseekKey} onChange={event=>setDeepseekKey(event.target.value.trim())} placeholder={settings.deepseek.apiConfigured?"已配置，留空保留":"请填写官方 API Key"}/></label>
         <p className="lm-model-status">DeepSeek 密钥：{settings.deepseek.apiConfigured?'已配置':'未配置，保存后才会生效'}</p>
       </>:settings.textProvider==="qwen"&&!settings.authRequired?<label>千问文字模型名称<input value={settings.qwen.model} onChange={event=>setSettings({...settings,qwen:{...settings.qwen,model:event.target.value}})}/></label>:null}
-      <label>地块生成链路<select aria-label="地块生成链路" value={settings.generationRoute} onChange={event=>{setSaved(false);setSettings({...settings,generationRoute:event.target.value as 'native-alpha'|'qwen-851'});}}><option value="native-alpha">直接生成透明地块</option><option value="qwen-851">普通生成＋851 Labs 云端抠图</option></select></label>
+      <label>地块生成链路<select aria-label="地块生成链路" value={settings.generationRoute} onChange={event=>{setSaved(false);setSettings({...settings,generationRoute:event.target.value as 'native-alpha'|'qwen-851'|'opaque'});}}><option value="native-alpha">直接生成透明地块 (千问 2.1 透明直出)</option><option value="opaque">不透明直出 (画风测试，不抠图)</option><option value="qwen-851">普通生成＋851 Labs 云端抠图</option></select></label>
       {settings.generationRoute==='native-alpha'?<>
         <label>透明生图模型<select aria-label="透明生图模型" value={settings.nativeImageModel} onChange={event=>setSettings({...settings,nativeImageModel:event.target.value})}><option value="qwen-image-2.1-turbo">qwen-image-2.1-turbo</option><option value="qwen-image-2.1-pro">qwen-image-2.1-pro</option></select></label>
         <p className="lm-model-status">完整地块直接输出透明 PNG。透明度未通过时保留原图、等待审核，不自动重生或调用云端抠图。</p>
+      </>:settings.generationRoute==='opaque'?<>
+        <label>千问生图模型<select aria-label="千问生图模型" value={settings.image.model} onChange={event=>setSettings({...settings,image:{...settings.image,model:event.target.value}})}><option value="qwen-image-2.0">qwen-image-2.0</option><option value="qwen-image-2.0-pro">qwen-image-2.0-pro</option><option value="qwen-image-2.1-turbo">qwen-image-2.1-turbo</option></select></label>
+        <p className="lm-model-status">🎨 不透明直出模式：生成普通有底图，用于单独测试画风与模型表现。不调用 851 Labs 抠图，不要求填写 Replicate Token，Prompt 无透明背景约束。</p>
       </>:<>
         <label>千问生图模型<select aria-label="千问生图模型" value={settings.image.model} onChange={event=>setSettings({...settings,image:{...settings.image,model:event.target.value}})}><option value="qwen-image-2.0">qwen-image-2.0</option><option value="qwen-image-2.0-pro">qwen-image-2.0-pro</option></select></label>
         {settings.textProvider!=='mock'&&!settings.authRequired&&<label>Replicate API Token<input type="password" autoComplete="off" aria-label="Replicate API Token" value={replicateKey} onChange={event=>setReplicateKey(event.target.value.trim())} placeholder={settings.backgroundRemoval?.apiConfigured?'已配置，留空保留':'用于 851-labs/background-remover'}/></label>}

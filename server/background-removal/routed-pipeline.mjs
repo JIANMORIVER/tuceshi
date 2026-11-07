@@ -20,7 +20,7 @@ export class RoutedTerrainPipeline {
     const result=await this.pending.get(key),ready=result.status==='ready';
     return {...job,request_status:result.status==='processing'?'running':job.request_status,original_image_url:`/api/terrain-images/${key}`,
       image_url:result.cutoutSha256?`/api/terrain-cutouts/${key}`:undefined,
-      background_removal:{version:ROUTED_ALPHA_VERSION,status:result.status,method:job.generation_route==='native-alpha'?'native-alpha':'851-labs/background-remover',source_sha256:result.sourceSha256,transparent_fraction:result.quality?.transparentPixels/(result.quality?.totalPixels||1)||0,warnings:result.warnings||[],message:result.message,prediction_id:result.predictionId},
+      background_removal:{version:ROUTED_ALPHA_VERSION,status:result.status,method:job.generation_route==='native-alpha'?'native-alpha':(job.generation_route==='opaque'?'none':'851-labs/background-remover'),route:job.generation_route,source_sha256:result.sourceSha256,transparent_fraction:result.quality?.transparentPixels/(result.quality?.totalPixels||1)||0,warnings:result.warnings||[],message:job.generation_route==='opaque'?'本次为不透明直出测试，未调用 851LAB 抠图':result.message,prediction_id:result.predictionId},
       calibration:{...job.calibration,status:'unverified',alphaVerified:ready,targetGroundRatio:job.calibration?.targetGroundRatio||752/448},error_message:ready?undefined:result.message};
   }
   async run(job){
@@ -55,6 +55,10 @@ export class RoutedTerrainPipeline {
         if(['failed','canceled'].includes(prediction.status)){state.status='failed';state.providerFailed=true;state.message='851 Labs 任务失败；原图保留，不会重新生图或自动重提抠图。';await save();return state;}
         if(prediction.status!=='succeeded'){state.message='851 Labs 正在处理，可继续查询当前任务。';await save();return state;}
         bytes=await this.remover.download(prediction.output,token,controller.signal);
+      }else if(route==='opaque'){
+        const decoded=decodePng(bytes);
+        Object.assign(state,{status:'ready',warnings:[],cutoutSha256:hash(bytes),width:decoded.width,height:decoded.height,message:undefined,isOpaqueDirect:true});
+        await writeFile(join(directory,'cutout.png.tmp'),bytes);await rename(join(directory,'cutout.png.tmp'),join(directory,'cutout.png'));await save();return state;
       }else if(route!=='native-alpha')throw Error('Unknown generation route');
       const decoded=decodePng(bytes),quality=alphaQuality(decoded),preservation=route==='qwen-851'?preservationQuality(decodePng(original),decoded):undefined;
       const ready=quality.ready&&(!preservation||preservation.ready);

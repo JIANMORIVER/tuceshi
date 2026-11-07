@@ -66,7 +66,7 @@ export type Experiment={
   notes:string[];
   rawText:string;
   provider:'mock'|'deepseek'|'qwen';
-  pipeline:{route:'native-alpha'|'qwen-851';model:string};
+  pipeline:{route:'native-alpha'|'qwen-851'|'opaque';model:string};
   analysis?:LifeInterpretationResponse;
   focuses:VisualizableEventCandidate[];
   focusIds:string[];
@@ -170,11 +170,27 @@ export class Workbench {
  syncModelSettings(settings: PublicModelSettings) {
   if (this.state.stage === 'results' || this.state.stage === 'selected') return;
   const provider = settings.textProvider === 'mock' ? 'mock' : (settings.textProvider as any);
+  const route = (['qwen-851', 'opaque'].includes(settings.generationRoute as any) ? settings.generationRoute : 'native-alpha') as 'native-alpha' | 'qwen-851' | 'opaque';
   const pipeline = {
-    route: settings.generationRoute === 'qwen-851' ? ('qwen-851' as const) : ('native-alpha' as const),
-    model: settings.generationRoute === 'qwen-851' ? settings.image.model : (settings.nativeImageModel || 'qwen-image-2.1-turbo')
+    route,
+    model: route === 'native-alpha' ? (settings.nativeImageModel || 'qwen-image-2.1-turbo') : settings.image.model
   };
   this.edit({ provider, pipeline });
+ }
+
+ setGenerationRoute(route: 'native-alpha' | 'qwen-851' | 'opaque') {
+  const currentModel = this.state.pipeline?.model || 'qwen-image-2.1-turbo';
+  const model = route === 'native-alpha' && !currentModel.startsWith('qwen-image-2.1') ? 'qwen-image-2.1-turbo' : currentModel;
+  const pipeline = {
+    route,
+    model
+  };
+  this.edit({ pipeline });
+  void fetch('/api/model-settings', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ generationRoute: route })
+  }).catch(() => {});
  }
 
  setLab(patch:Partial<LabConfig>){
@@ -216,7 +232,8 @@ export class Workbench {
   this.edit({rawText});
   const result=await this.api.call<LifeInterpretationResponse>('/api/diary/interpret',{input:rawText});
   const focuses=buildDiaryFocusCandidates(result.envelope.diary_interpretation,rawText);
-  this.edit({analysis:result,focuses,focusIds:recommendDefaultFocusEvents(focuses),provider:result.debug.provider as Experiment['provider'],pipeline:{route:settings.generationRoute==='qwen-851'?'qwen-851':'native-alpha',model:settings.generationRoute==='qwen-851'?settings.image.model:settings.nativeImageModel||'qwen-image-2.1-turbo'},stage:'focus'});
+  const route = (['qwen-851', 'opaque'].includes(settings.generationRoute as any) ? settings.generationRoute : 'native-alpha') as 'native-alpha' | 'qwen-851' | 'opaque';
+  this.edit({analysis:result,focuses,focusIds:recommendDefaultFocusEvents(focuses),provider:result.debug.provider as Experiment['provider'],pipeline:{route,model:route==='native-alpha'?(settings.nativeImageModel||'qwen-image-2.1-turbo'):settings.image.model},stage:'focus'});
  });}
  async inquire(){if(this.state.stage!=='focus'&&this.state.stage!=='inquiry')return;await this.task(async()=>{
   if(!this.state.focusIds.length||this.state.focusIds.length>3)throw Error('请选择1–3项重点。');this.edit({stage:'inquiry'});

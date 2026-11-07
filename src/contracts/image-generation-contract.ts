@@ -142,9 +142,9 @@ export interface GenerationAuditReport {
 
 export interface GenerationJob {
   manual_review?: { decision: "approved"; job_id: string; image_url: string; source_sha256?: string; reviewed_at: string };
-  generation_route?: 'legacy-local'|'native-alpha'|'qwen-851';
+  generation_route?: 'legacy-local'|'native-alpha'|'opaque'|'qwen-851';
   original_image_url?: string;
-  background_removal?: { version:string; status:"ready"|"needs_review"|"failed"|"processing"; method:string; source_sha256?:string; transparent_fraction:number;warnings?:string[];message?:string;prediction_id?:string };
+  background_removal?: { version:string; status:"ready"|"needs_review"|"failed"|"processing"; method:string; route?:string; source_sha256?:string; transparent_fraction:number;warnings?:string[];message?:string;prediction_id?:string };
   calibration?: { status: "unverified"; alphaVerified: boolean; targetGroundRatio: number };
   imageSize?: { width: number; height: number };
   job_id: string;                         // 唯一任务标识，例如 "job_1729580000_c1"

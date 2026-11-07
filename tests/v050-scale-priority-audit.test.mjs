@@ -73,13 +73,13 @@ test('验收项 1：同时上传 Structure 与 Scale 参考图，角色不混淆
 
   // 验证 Structure 模块不包含 Scale 的尺寸内容
   assert.ok(modStruct.content.includes('严格遵循结构参考图的地块外形'));
-  assert.ok(modStruct.content.includes('黑色标记'));
+  assert.match(modStruct.content, /(红色|黑色)标记/);
   assert.ok(!modStruct.content.includes('仅供相对尺寸比例参考'));
 
   // 验证 Scale 模块不包含 Structure 的地块轮廓与出口
   assert.ok(modScale.content.includes('严格以尺度参考图为准'));
   assert.ok(modScale.content.includes('相对大小与比例尺'));
-  assert.ok(!modScale.content.includes('黑色标记'));
+  assert.doesNotMatch(modScale.content, /(红色|黑色)标记/);
   assert.ok(!modScale.content.includes('菱形地块'));
 });
 
@@ -110,7 +110,7 @@ test('验收项 2：两种角色规则分别独立生效，Scale 严格不影响
   );
 
   // 验证 Structure 规则强化出口约束
-  assert.match(promptResult.positive, /结构图中的每个黑色标记，都必须转化为指定边缘上的自然道路出口/);
+  assert.match(promptResult.positive, /结构图中的每个(红色|黑色)标记，都必须转化为指定边缘上的自然道路出口/);
   assert.match(promptResult.positive, /道路必须延伸至地块边缘/);
   assert.match(promptResult.positive, /禁止只在地块内部生成道路却没有实际连接到边缘/);
   assert.match(promptResult.positive, /不同场景允许使用不同道路材质/);
@@ -144,7 +144,7 @@ test('验收项 3：移除 Scale 参考图后，Structure 仍可独立正常工�
 
   // Structure 规则仍然生效
   assert.match(promptResult.positive, /严格遵循结构参考图的地块外形/);
-  assert.match(promptResult.positive, /黑色标记/);
+  assert.match(promptResult.positive, /(红色|黑色)标记/);
 
   // Scale 规则自动退回标准默认尺度规则
   assert.match(promptResult.positive, /物体与建筑保持等距像素插画的标准比例尺/);

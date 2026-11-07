@@ -19,8 +19,8 @@ export class ModelSettings {
   backgroundConfig() { return {apiToken:this.replicateKey || this.environment.REPLICATE_API_TOKEN || ''}; }
   terrainConfig(pipeline) {
     const route=pipeline?.route || this.generationRoute;
-    if(!['legacy-local','native-alpha','qwen-851'].includes(route))fail('地块生成链路无效。');
-    const model=pipeline?.model || (route==='native-alpha'?this.nativeImageModel:this.imageModel);
+    if(!['legacy-local','native-alpha','qwen-851','opaque'].includes(route))fail('地块生成链路无效。');
+    const model=pipeline?.model || (['native-alpha','opaque'].includes(route)?this.nativeImageModel:this.imageModel);
     if(route==='native-alpha'&&!['qwen-image-2.1-turbo','qwen-image-2.1-pro'].includes(model))fail('直接透明链路需要千问 2.1 模型。');
     return {...readImageConfig({...this.environment,LIFE_MAP_IMAGE_MODEL:model,...(this.qwenKey?{LIFE_MAP_IMAGE_API_KEY:this.qwenKey}:{})}),generationRoute:route};
   }
@@ -36,7 +36,7 @@ export class ModelSettings {
   }
   update(input) {
     if (!input || typeof input !== "object" || !["qwen","deepseek","mock"].includes(input.textProvider)) fail("请选择有效的文字模型供应商。");
-    if(input.generationRoute!==undefined&&!['native-alpha','qwen-851'].includes(input.generationRoute))fail('请选择有效的地块生成链路。');
+    if(input.generationRoute!==undefined&&!['native-alpha','qwen-851','opaque'].includes(input.generationRoute))fail('请选择有效的地块生成链路。');
     if(input.nativeImageModel!==undefined&&!['qwen-image-2.1-turbo','qwen-image-2.1-pro'].includes(input.nativeImageModel))fail('直接透明链路需要千问 2.1 模型。');
     if(input.replicateKey!==undefined&&(typeof input.replicateKey!=='string'||input.replicateKey.length>4096||/\s/.test(input.replicateKey)))fail('Replicate Token 格式无效。');
     for (const name of ["deepseekModel","qwenModel","visionModel"]) if (input[name] !== undefined && !modelName(input[name])) fail("模型名称格式无效。");

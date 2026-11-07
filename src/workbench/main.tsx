@@ -56,7 +56,8 @@ function App(){
  useEffect(()=>{
   if(settings)return;
   void api.call<any>('/api/model-settings').then(s=>{
-   setMode(s.textProvider==='mock'?'离线规则 · 零模型调用':`${s.textProvider} + ${s.generationRoute==='qwen-851'?'千问 / 851 Labs':'千问直接透明'}`);
+   const routeDesc = s.generationRoute === 'qwen-851' ? '千问 / 851 Labs' : s.generationRoute === 'opaque' ? '不透明直出 (画风测试)' : '千问直接透明';
+   setMode(s.textProvider==='mock'?'离线规则 · 零模型调用':`${s.textProvider} + ${routeDesc}`);
    flow.syncModelSettings(s);
   }).catch(()=>setMode('模型服务不可用，请运行 npm run dev 或 npm start'));
  },[settings]);
@@ -119,12 +120,12 @@ function App(){
      </div>
     </header>
 
-    <p className="label">{e.provider==='mock'?'离线模拟图片':e.pipeline.route==='native-alpha'?'直接透明链路':'千问普通生成 + 851 Labs'}</p>
+    <p className="label">{e.provider==='mock'?'离线模拟图片':e.pipeline.route==='native-alpha'?'直接透明链路':e.pipeline.route==='opaque'?'不透明直出 (画风测试 · 未调用 851LAB)':'千问普通生成 + 851 Labs'}</p>
 
     {candidate.job?.image_url?<div className="checker"><img key={`${candidate.job.image_url}:${images[candidate.id]?.reload||0}`} src={candidate.job.image_url} alt={candidate.plan.title} onLoad={()=>setImages(old=>({...old,[candidate.id]:{url:candidate.job!.image_url!,loaded:true,failed:false,reload:old[candidate.id]?.reload||0}}))} onError={()=>setImages(old=>({...old,[candidate.id]:{url:candidate.job!.image_url!,loaded:false,failed:true,reload:old[candidate.id]?.reload||0}}))}/></div>:<div className="image-wait" role="status">{candidate.status==='not_started'?'尚未提交':candidate.status==='submitting'?'正在生成并检查透明背景…':candidate.error?'提交或处理需要核查':'结果尚未准备好'}</div>}
     {(candidate.error||candidate.job?.error_message)&&<p role="alert">{candidate.error||candidate.job?.error_message}</p>}
 
-    <p className="label">{hasTerrainApproval(candidate.job)?'你已审核通过':candidate.job?.background_removal?.status==='needs_review'?'透明度或整块地形检查未通过，待你审核':candidate.job?.background_removal?.status==='ready'?'透明度检查通过 · 地面锚点仍待校验':candidate.job?.request_status||candidate.status}</p>
+    <p className="label">{hasTerrainApproval(candidate.job)?'你已审核通过':candidate.job?.background_removal?.route==='opaque'?'不透明直出完成 · 851LAB 未调用':candidate.job?.background_removal?.status==='needs_review'?'透明度或整块地形检查未通过，待你审核':candidate.job?.background_removal?.status==='ready'?'透明度检查通过 · 地面锚点仍待校验':candidate.job?.request_status||candidate.status}</p>
 
     <details><summary>构图与完整提示词</summary>
      <p><strong>场景构图描述：</strong>{candidate.plan.scene_description}</p>
@@ -184,7 +185,13 @@ function App(){
       </details>
     )}
 
-    {candidate.job?.original_image_url&&<details><summary>原图与透明图对比</summary><div className="comparison"><figure><figcaption>原图保留</figcaption><img src={candidate.job.original_image_url} alt="原始生成图片"/><a href={candidate.job.original_image_url} download={`${candidate.id}-original.png`}>下载原图</a></figure><figure><figcaption>透明结果</figcaption>{candidate.job.image_url&&<div className="checker"><img src={candidate.job.image_url} alt="透明结果"/></div>}{candidate.job.image_url&&<a href={candidate.job.image_url} download={`${candidate.id}-transparent.png`}>下载透明图</a>}</figure></div></details>}
+    {candidate.job?.original_image_url&&candidate.job.background_removal?.route!=='opaque'&&<details><summary>原图与透明图对比</summary><div className="comparison"><figure><figcaption>原图保留</figcaption><img src={candidate.job.original_image_url} alt="原始生成图片"/><a href={candidate.job.original_image_url} download={`${candidate.id}-original.png`}>下载原图</a></figure><figure><figcaption>透明结果</figcaption>{candidate.job.image_url&&<div className="checker"><img src={candidate.job.image_url} alt="透明结果"/></div>}{candidate.job.image_url&&<a href={candidate.job.image_url} download={`${candidate.id}-transparent.png`}>下载透明图</a>}</figure></div></details>}
+    {candidate.job?.image_url&&candidate.job.background_removal?.route==='opaque'&&(
+      <div className="opaque-result-info" style={{margin:'0.5rem 0',padding:'0.5rem 0.75rem',background:'#f0f9eb',border:'1px solid #c2e7b0',borderRadius:'4px',fontSize:'0.85rem'}}>
+        <strong>🎨 不透明直出模式：</strong> 已直接生成普通有底图，用于评估画风与构图。<strong>未调用 851LAB 抠图</strong>，无透明背景约束。
+        <div style={{marginTop:'0.25rem'}}><a href={candidate.job.image_url} download={`${candidate.id}-opaque.png`}>下载当前不透明图</a></div>
+      </div>
+    )}
     {images[candidate.id]?.failed&&images[candidate.id]?.url===candidate.job?.image_url&&<p role="alert">图片未加载，暂不能选择。<button onClick={()=>setImages(old=>({...old,[candidate.id]:{...old[candidate.id],failed:false,reload:(old[candidate.id]?.reload||0)+1}}))}>重新加载图片</button></p>}
 
     <div className="actions">
@@ -220,7 +227,7 @@ function App(){
   <main>
    <header className="top">
     <div>
-     <p className="eyebrow">LIFE MAP · STANDALONE V0.7.3</p>
+     <p className="eyebrow">LIFE MAP · STANDALONE V0.7.5</p>
      <h1>生图控制与实验工作台</h1>
      <p>文生图 · 图生图 · 风格包迁移 · 分层干预 · 实验档案馆</p>
     </div>
@@ -232,6 +239,39 @@ function App(){
     <span className="mode-indicator">
       当前模式：{e.lab.mode==='image_to_image'?'🖼️ 图生图/参考图':'📝 纯文生图'} · 风格：{currentStyle?.style_name}
     </span>
+   </div>
+
+   <div className="output-route-selector-bar" style={{display:'flex',alignItems:'center',gap:'0.5rem',flexWrap:'wrap',padding:'0.45rem 0.8rem',background:'#f8fafc',borderRadius:'6px',border:'1px solid #e2e8f0',margin:'0.5rem 0'}}>
+    <strong style={{fontSize:'0.85rem',color:'#334155'}}>输出模式：</strong>
+    <button
+      type="button"
+      style={{padding:'0.25rem 0.65rem',fontSize:'0.82rem',borderRadius:'4px',border:e.pipeline.route==='native-alpha'?'1px solid #1677ff':'1px solid #cbd5e1',background:e.pipeline.route==='native-alpha'?'#e6f4ff':'#fff',color:e.pipeline.route==='native-alpha'?'#0958d9':'#334155',cursor:'pointer',fontWeight:e.pipeline.route==='native-alpha'?'bold':'normal'}}
+      onClick={()=>flow.setGenerationRoute('native-alpha')}
+      title="千问 2.1 透明背景直出，自动检查边缘透明度"
+    >
+      🌟 透明直出 (千问 2.1)
+    </button>
+    <button
+      type="button"
+      style={{padding:'0.25rem 0.65rem',fontSize:'0.82rem',borderRadius:'4px',border:e.pipeline.route==='opaque'?'1px solid #52c41a':'1px solid #cbd5e1',background:e.pipeline.route==='opaque'?'#f6ffed':'#fff',color:e.pipeline.route==='opaque'?'#389e0d':'#334155',cursor:'pointer',fontWeight:e.pipeline.route==='opaque'?'bold':'normal'}}
+      onClick={()=>flow.setGenerationRoute('opaque')}
+      title="普通有底图直接输出，用于画风测试。不调用 851 Labs 抠图，不要求填写 Token，Prompt 无透明背景约束"
+    >
+      🎨 不透明直出 (画风测试·免抠图)
+    </button>
+    <button
+      type="button"
+      style={{padding:'0.25rem 0.65rem',fontSize:'0.82rem',borderRadius:'4px',border:e.pipeline.route==='qwen-851'?'1px solid #fa8c16':'1px solid #cbd5e1',background:e.pipeline.route==='qwen-851'?'#fff7e6':'#fff',color:e.pipeline.route==='qwen-851'?'#d46b08':'#334155',cursor:'pointer',fontWeight:e.pipeline.route==='qwen-851'?'bold':'normal'}}
+      onClick={()=>flow.setGenerationRoute('qwen-851')}
+      title="普通生图后调用 851 Labs 进行云端抠图（需配置 Replicate API Token）"
+    >
+      ✂️ 851LAB 抠图 (普通图+抠图)
+    </button>
+    {e.pipeline.route === 'opaque' && (
+      <span style={{fontSize:'0.8rem',color:'#237804',background:'#f6ffed',padding:'0.2rem 0.5rem',borderRadius:'3px',border:'1px solid #b7eb8f',marginLeft:'auto'}}>
+        💡 不调用 851LAB · Prompt 无透明背景词 · 纯测画风
+      </span>
+    )}
    </div>
 
    {/* 顶部主工作区 Tab 导航 */}
