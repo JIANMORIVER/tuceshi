@@ -145,6 +145,220 @@ export function createTunneledFetch(proxyUrl) {
 }
 
 /**
+ * 统一提取错误链（包括 err, err.cause, 嵌套 cause 等）中的真实错误码与错误信息
+ */
+export function extractNetworkErrorInfo(err) {
+  const codes = [];
+  const messages = [];
+
+  let curr = err;
+  let depth = 0;
+  while (curr && depth < 5) {
+    if (curr.code) codes.push(String(curr.code));
+    if (curr.status) codes.push(`HTTP_${curr.status}`);
+    if (curr.name && curr.name !== 'Error' && curr.name !== 'TypeError') codes.push(String(curr.name));
+    if (curr.message) messages.push(String(curr.message));
+    curr = curr.cause;
+    depth++;
+  }
+
+  const rawCode = codes.find(c => c !== 'TypeError' && c !== 'Error') || err?.name || 'NETWORK_ERROR';
+  const combined = `${codes.join(' ')} ${messages.join(' ')}`;
+
+  const isTimeout = /ETIMEDOUT|ESOCKETTIMEDOUT|timeout|AbortError/i.test(combined);
+  const isDns = /ENOTFOUND|EAI_AGAIN|EAI_FAIL|getaddrinfo/i.test(combined);
+  const isConnReset = /ECONNRESET|ECONNABORTED|EPIPE|UND_ERR_SOCKET|disconnected before secure TLS/i.test(combined);
+  const isProxy = /PROXY|proxy|ECONNREFUSED/i.test(combined);
+  const isTls = /CERT|TLS|SSL/i.test(combined);
+
+  let errorCategory = "unknown_network_error";
+  if (isTimeout) errorCategory = "timeout";
+  else if (isDns) errorCategory = "dns_failure";
+  else if (isConnReset) errorCategory = "connection_reset";
+  else if (isProxy) errorCategory = "proxy_error";
+  else if (isTls) errorCategory = "tls_error";
+
+  return {
+    rawCode: String(rawCode),
+    combined,
+    messages: messages.join('; '),
+    errorCategory,
+    isTimeout,
+    isDns,
+    isConnReset,
+    isProxy,
+    isTls
+  };
+}
+
+/**
+ * 零费用探测百炼直连是否可达
+ */
+export async function checkDirectReachability(targetUrl, timeoutMs = 2500) {
+  let targetHost = 'dashscope.aliyuncs.com';
+  let targetPort = 443;
+  try {
+    const u = new URL(targetUrl);
+    targetHost = u.hostname;
+    targetPort = Number(u.port) || (u.protocol === 'http:' ? 80 : 443);
+  } catch {}
+
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const req = https.request({
+      host: targetHost,
+      port: targetPort,
+      path: '/',
+      method: 'HEAD',
+      timeout: timeoutMs
+    }, (res) => {
+      resolve({ ok: true, status: res.statusCode, elapsed: Date.now() - t0 });
+    });
+    req.on('error', (err) => {
+      resolve({ ok: false, error: err, elapsed: Date.now() - t0 });
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      const err = new Error('Direct reachability check timed out');
+      err.code = 'ETIMEDOUT';
+      resolve({ ok: false, error: err, elapsed: Date.now() - t0 });
+    });
+    req.end();
+  });
+}
+
+/**
+ * 探测代理是否真正支持 HTTPS CONNECT 隧道
+ */
+export async function checkProxyConnect(proxyUrl, targetHost, targetPort = 443, timeoutMs = 2000) {
+  let proxyHost = '127.0.0.1';
+  let proxyPort = 7897;
+  try {
+    const u = new URL(proxyUrl);
+    proxyHost = u.hostname;
+    proxyPort = Number(u.port) || 80;
+  } catch {
+    const [h, p] = String(proxyUrl).replace(/^https?:\/\//, '').split(':');
+    proxyHost = h || '127.0.0.1';
+    proxyPort = Number(p) || 7897;
+  }
+
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const req = http.request({
+      host: proxyHost,
+      port: proxyPort,
+      method: 'CONNECT',
+      path: `${targetHost}:${targetPort}`,
+      timeout: timeoutMs
+    });
+    req.on('connect', (res, socket) => {
+      socket.destroy();
+      resolve({ ok: res.statusCode === 200, status: res.statusCode, elapsed: Date.now() - t0 });
+    });
+    req.on('error', (err) => resolve({ ok: false, error: err, elapsed: Date.now() - t0 }));
+    req.on('timeout', () => {
+      req.destroy();
+      const err = new Error('Proxy CONNECT timed out');
+      err.code = 'ETIMEDOUT';
+      resolve({ ok: false, error: err, elapsed: Date.now() - t0 });
+    });
+    req.end();
+  });
+}
+
+let preflightCache = {
+  key: "",
+  result: null,
+  timestamp: 0
+};
+
+/**
+ * 生图前零费用网络预检，选定网络路径或提前阻断
+ */
+export async function preflightNetworkCheck(config, options = {}) {
+  const forceRefresh = options.forceRefresh || false;
+  let targetUrl = config.baseUrl || "https://dashscope.aliyuncs.com";
+  let targetHost = "dashscope.aliyuncs.com";
+  let targetPort = 443;
+  try {
+    const u = new URL(targetUrl);
+    targetHost = u.hostname;
+    targetPort = Number(u.port) || (u.protocol === 'http:' ? 80 : 443);
+  } catch {}
+
+  const cacheKey = `${targetHost}:${targetPort}:${config.proxy || ''}`;
+  if (!forceRefresh && preflightCache.key === cacheKey && (Date.now() - preflightCache.timestamp < 30000)) {
+    return preflightCache.result;
+  }
+
+  // 1. 如果配置了显式代理，优先预检显式代理是否支持 CONNECT
+  const explicitProxy = config.proxy || process.env.LIFE_MAP_IMAGE_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy || "";
+  if (explicitProxy) {
+    const proxyCheck = await checkProxyConnect(explicitProxy, targetHost, targetPort, 2000);
+    if (proxyCheck.ok) {
+      const res = {
+        route: "proxy",
+        proxyUrl: explicitProxy,
+        directOk: false,
+        proxyOk: true,
+        details: `已连通显式代理隧道 ${explicitProxy}`
+      };
+      preflightCache = { key: cacheKey, result: res, timestamp: Date.now() };
+      return res;
+    }
+  }
+
+  // 2. 预检直连是否可达（支持 TUN 模式或正常国内网络）
+  const directCheck = await checkDirectReachability(targetUrl, 2500);
+  if (directCheck.ok) {
+    const res = {
+      route: "direct",
+      proxyUrl: null,
+      directOk: true,
+      proxyOk: false,
+      details: "百炼接口直连通畅 (Direct/TUN 正常)"
+    };
+    preflightCache = { key: cacheKey, result: res, timestamp: Date.now() };
+    return res;
+  }
+
+  // 3. 直连不可达（如遇到 TUN Fake-IP Client Hello 重置断开），探测本地 Clash HTTP/Mixed 代理
+  const candidatePorts = [7897, 7890, 1087, 10808];
+  for (const port of candidatePorts) {
+    const candidateProxy = `http://127.0.0.1:${port}`;
+    const proxyCheck = await checkProxyConnect(candidateProxy, targetHost, targetPort, 1500);
+    if (proxyCheck.ok) {
+      const res = {
+        route: "proxy",
+        proxyUrl: candidateProxy,
+        directOk: false,
+        proxyOk: true,
+        details: `百炼直连受阻，已预检连通本地代理隧道 ${candidateProxy}`
+      };
+      preflightCache = { key: cacheKey, result: res, timestamp: Date.now() };
+      return res;
+    }
+  }
+
+  // 4. 直连与代理均不可达：预检失败，在发起付费提交前坚决阻断
+  const directErrInfo = directCheck.error ? extractNetworkErrorInfo(directCheck.error) : { rawCode: 'CONNECTION_FAILED', errorCategory: 'connection_reset' };
+  const netErr = new ImageCardError(
+    "PREFLIGHT_NETWORK_FAILED",
+    `生图前网络预检失败：百炼接口直连不可达 [${directErrInfo.rawCode}]，且本地未检测到可用的 HTTPS CONNECT 代理（已探测 7897/7890 等端口）。已阻止付费提交，请检查网络或开启代理客户端。`,
+    502
+  );
+  netErr.details = {
+    stage: "preflight_check",
+    underlyingErrorCode: directErrInfo.rawCode,
+    errorCategory: directErrInfo.errorCategory || "connection_reset",
+    targetHost,
+    proxyUsed: false
+  };
+  throw netErr;
+}
+
+/**
  * 探测本地标准代理端口是否存活
  */
 export async function probeLocalProxy() {
@@ -197,9 +411,8 @@ export function createSmartFetcher(customProxy = "") {
       if (options.signal?.aborted) {
         throw err;
       }
-      const combined = `${err?.code || ''} ${err?.message || ''} ${err?.cause?.code || ''} ${err?.cause?.message || ''}`;
-      const isConnReset = /ECONNRESET|ECONNABORTED|UND_ERR_SOCKET|disconnected before secure TLS/i.test(combined);
-      if (isConnReset) {
+      const errInfo = extractNetworkErrorInfo(err);
+      if (errInfo.isConnReset) {
         const fallbackProxy = await probeLocalProxy();
         if (fallbackProxy) {
           console.warn(`[smartFetch] 检测到直连断开/被重置 (TUN 模式)，自愈切换至本地代理: ${fallbackProxy}`);
@@ -217,21 +430,9 @@ export function createSmartFetcher(customProxy = "") {
  * 精准分析底层网络异常，分类归因
  */
 export function classifyNetworkError(err, signal, elapsedMs, config = {}, proxyUsed = false, effectiveProxy = "", stage = "qwen_submitting") {
-  let errCategory = "unknown_network_error";
-  const rawCode = err?.code || err?.cause?.code || err?.name || "NETWORK_ERROR";
-  const rawMsg = err?.message || err?.cause?.message || String(err || "");
-
-  if (signal?.aborted || /ETIMEDOUT|ESOCKETTIMEDOUT|timeout/i.test(rawCode + " " + rawMsg)) {
-    errCategory = "timeout";
-  } else if (/ENOTFOUND|EAI_AGAIN|EAI_FAIL|getaddrinfo/i.test(rawCode + " " + rawMsg)) {
-    errCategory = "dns_failure";
-  } else if (/ECONNRESET|ECONNABORTED|EPIPE|UND_ERR_SOCKET|disconnected before secure TLS/i.test(rawCode + " " + rawMsg)) {
-    errCategory = "connection_reset";
-  } else if (/PROXY|proxy|ECONNREFUSED/i.test(rawCode + " " + rawMsg) && proxyUsed) {
-    errCategory = "proxy_error";
-  } else if (/CERT|TLS|SSL/i.test(rawCode + " " + rawMsg)) {
-    errCategory = "tls_error";
-  }
+  const errInfo = extractNetworkErrorInfo(err);
+  let errCategory = errInfo.errorCategory;
+  if (signal?.aborted) errCategory = "timeout";
 
   let targetHost = "dashscope.aliyuncs.com";
   try {
@@ -247,10 +448,10 @@ export function classifyNetworkError(err, signal, elapsedMs, config = {}, proxyU
     }
   }
 
-  const netErr = new ImageCardError("NETWORK_ERROR", `无法连接百炼服务 [${errCategory}] (${rawCode}): ${rawMsg}`, 502);
+  const netErr = new ImageCardError("NETWORK_ERROR", `无法连接百炼服务 [${errCategory}] (${errInfo.rawCode}): ${err?.message || errInfo.messages}`, 502);
   netErr.details = {
     stage,
-    underlyingErrorCode: String(rawCode),
+    underlyingErrorCode: String(errInfo.rawCode),
     errorCategory: errCategory,
     elapsedMs,
     targetHost,
@@ -280,10 +481,17 @@ export class DashScopeAdapter {
     }
     requestContent.push({ text: prompt.positive });
 
+    // 核心改造：生图前网络预检（零模型费用），提前选定直连或代理路径
     let effectiveProxy = config.proxy || process.env.LIFE_MAP_IMAGE_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy || "";
-    let activeFetcher = this.fetcher;
+    let selectedRoute = effectiveProxy ? "proxy" : "direct";
 
-    // 仅在真实环境下生效代理隧道
+    if (this.isDefaultFetcher) {
+      const preflight = await preflightNetworkCheck(config, { signal });
+      selectedRoute = preflight.route;
+      effectiveProxy = preflight.proxyUrl || "";
+    }
+
+    let activeFetcher = this.fetcher;
     if (this.isDefaultFetcher && effectiveProxy) {
       activeFetcher = createTunneledFetch(effectiveProxy);
     }
@@ -308,34 +516,11 @@ export class DashScopeAdapter {
       });
     } catch (err) {
       if (signal?.aborted) throw signal.reason;
-
-      // 自愈机制：如果使用默认直连因 Fake-IP / TUN 模式导致连接重置，探测并自愈切换至本地可用代理
-      if (this.isDefaultFetcher && !effectiveProxy) {
-        const isConnReset = /ECONNRESET|UND_ERR_SOCKET|disconnected before secure TLS/i.test(String(err?.code || '') + ' ' + String(err?.message || ''));
-        if (isConnReset) {
-          const fallbackProxy = await probeLocalProxy();
-          if (fallbackProxy) {
-            console.warn(`[DashScopeAdapter] 检测到本地网络连接重置 (TUN 模式)，自愈切换至本地代理 ${fallbackProxy}`);
-            try {
-              const tunneled = createTunneledFetch(fallbackProxy);
-              response = await tunneled(`${config.baseUrl}/api/v1/services/aigc/multimodal-generation/generation`, {
-                method: "POST", redirect: "manual", signal,
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-                body: payloadBody
-              });
-              effectiveProxy = fallbackProxy;
-              activeFetcher = tunneled;
-            } catch (innerErr) {
-              if (signal?.aborted) throw signal.reason;
-              throw classifyNetworkError(innerErr, signal, Date.now() - t0, config, true, fallbackProxy, "qwen_submitting");
-            }
-          }
-        }
-      }
-
-      if (!response) {
-        throw classifyNetworkError(err, signal, Date.now() - t0, config, Boolean(effectiveProxy), effectiveProxy, "qwen_submitting");
-      }
+      // 铁律：生图请求发出后，若失败绝不自动换代理重新提交（避免重复计费）！
+      // 提取错误链真实错误码，直接抛出精准分类异常
+      const netErr = classifyNetworkError(err, signal, Date.now() - t0, config, Boolean(effectiveProxy), effectiveProxy, "qwen_submitting");
+      netErr.details.selectedRoute = selectedRoute;
+      throw netErr;
     }
 
     const responseContentType = response.headers?.get?.("content-type") || "";
@@ -449,6 +634,7 @@ export class DashScopeAdapter {
         contentType: responseContentType,
         networkMeta: {
           stage: "completed",
+          selectedRoute,
           elapsedMs: Date.now() - t0,
           proxyUsed: Boolean(effectiveProxy),
           proxyEndpoint: effectiveProxy ? new URL(effectiveProxy).host : undefined,

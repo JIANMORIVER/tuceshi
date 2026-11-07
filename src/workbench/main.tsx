@@ -139,8 +139,12 @@ function App(){
        <div className="audit-report-content">
         <div className="audit-grid">
          <div><strong>执行阶段：</strong><span className="badge-pill">{candidate.job.audit_report.stage}</span></div>
-         <div><strong>HTTP 状态：</strong><span>{candidate.job.audit_report.http_meta?.status_code || 200}</span></div>
+         <div><strong>网络链路：</strong><span>{candidate.job.audit_report.network_meta?.selected_route === 'proxy' ? `代理隧道 (${candidate.job.audit_report.network_meta?.proxy_endpoint || '本地代理'})` : '直连百炼 (Direct/TUN)'}</span></div>
+         <div><strong>供应商状态：</strong><span>{candidate.job.audit_report.http_meta?.provider_status_code !== undefined && candidate.job.audit_report.http_meta?.provider_status_code !== null ? `HTTP ${candidate.job.audit_report.http_meta.provider_status_code}` : '无响应（网络阶段未触达供应商）'}</span></div>
+         <div><strong>本地服务状态：</strong><span>HTTP {candidate.job.audit_report.http_meta?.local_status_code || 200}</span></div>
+         <div><strong>系统版本：</strong><span>V{candidate.job.audit_report.runtime_version?.version || '0.7.3'} ({candidate.job.audit_report.runtime_version?.git_commit ? `commit: ${candidate.job.audit_report.runtime_version.git_commit}` : 'git'})</span></div>
          <div><strong>Content-Type：</strong><span>{candidate.job.audit_report.http_meta?.content_type || 'application/json'}</span></div>
+         {candidate.job.audit_report.network_meta?.underlying_error_code && <div><strong>底层网络错误：</strong><code className="error-code">{candidate.job.audit_report.network_meta.underlying_error_code} ({candidate.job.audit_report.network_meta.error_category || '网络断开'})</code></div>}
          {candidate.job.audit_report.request_id && <div><strong>百炼 Request ID：</strong><code>{candidate.job.audit_report.request_id}</code></div>}
          {candidate.job.audit_report.provider_raw_error_code && <div><strong>千问原始错误码：</strong><code className="error-code">{candidate.job.audit_report.provider_raw_error_code}</code></div>}
          {candidate.job.audit_report.backend_error_code && <div><strong>后端错误码：</strong><code>{candidate.job.audit_report.backend_error_code}</code></div>}
@@ -291,6 +295,7 @@ function App(){
        busy={flow.busy}
        onUpdateLab={patch=>flow.setLab(patch)}
        onAddReferenceImage={img=>flow.addReferenceImage(img)}
+       onAddReferenceImages={imgs=>flow.addReferenceImages(imgs)}
        onRemoveReferenceImage={id=>flow.removeReferenceImage(id)}
        onUpdateReferenceImageRole={(id,role)=>flow.updateReferenceImageRole(id,role)}
      />

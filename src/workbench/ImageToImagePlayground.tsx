@@ -18,6 +18,7 @@ interface ImageToImagePlaygroundProps {
   busy: boolean;
   onUpdateLab: (patch: Partial<LabConfig>) => void;
   onAddReferenceImage: (img: ReferenceImage) => void;
+  onAddReferenceImages?: (imgs: ReferenceImage[]) => void;
   onRemoveReferenceImage: (id: string) => void;
   onUpdateReferenceImageRole: (id: string, role: ReferenceImageRole) => void;
 }
@@ -27,6 +28,7 @@ export const ImageToImagePlayground: React.FC<ImageToImagePlaygroundProps> = ({
   busy,
   onUpdateLab,
   onAddReferenceImage,
+  onAddReferenceImages,
   onRemoveReferenceImage,
   onUpdateReferenceImageRole
 }) => {
@@ -115,45 +117,89 @@ export const ImageToImagePlayground: React.FC<ImageToImagePlaygroundProps> = ({
     e.target.value = '';
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    const currentImages = lab.referenceImages || [];
+    const currentCount = currentImages.length;
+    const availableSlots = Math.max(0, 3 - currentCount);
+
+    if (availableSlots <= 0) {
+      alert('最多支持添加 3 张参考图。');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    const validFiles: File[] = [];
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
       if (!file.type.startsWith('image/')) {
-        alert('请上传 PNG、JPEG 或 WebP 格式的图片。');
+        alert(`文件 ${file.name} 不是支持的图片格式，已跳过。`);
         continue;
       }
       if (file.size > 8 * 1024 * 1024) {
-        alert('参考图大小不能超过 8MB。');
+        alert(`图片 ${file.name} 大小超过 8MB，已跳过。`);
         continue;
       }
-      if ((lab.referenceImages?.length || 0) >= 3) {
-        alert('最多支持添加 3 张参考图。');
-        break;
-      }
-
-      const existingRoles = (lab.referenceImages || []).map(r => r.role);
-      // 默认角色推导：首张为 structure，已有 structure 则优先建议 scale，允许用户后续手动切换；绝不依据文件名篡改
-      const initialRole: ReferenceImageRole = existingRoles.includes('structure')
-        ? (existingRoles.includes('scale') ? 'style' : 'scale')
-        : 'structure';
-
-      void compressAndScaleImage(file).then(({ dataUrl, sizeBytes }) => {
-        onAddReferenceImage({
-          id: `ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          name: file.name,
-          role: initialRole,
-          dataUrl,
-          sizeBytes
-        });
-      }).catch(() => {
-        alert('读取图片失败，请检查文件格式。');
-      });
+      validFiles.push(file);
     }
 
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (validFiles.length === 0) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    let filesToProcess = validFiles;
+    if (validFiles.length > availableSlots) {
+      alert(`参考图上限为 3 张（当前已有 ${currentCount} 张），已为您选取前 ${availableSlots} 张。`);
+      filesToProcess = validFiles.slice(0, availableSlots);
+    }
+
+    // 严谨计算每张待添加图片的角色：
+    // Structure：地块结构；Scale：物体比例；Style：画风
+    const existingRoles = currentImages.map(r => r.role);
+    const assignedRoles: ReferenceImageRole[] = [];
+
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const allRolesSoFar = [...existingRoles, ...assignedRoles];
+      let nextRole: ReferenceImageRole = 'structure';
+      if (!allRolesSoFar.includes('structure')) {
+        nextRole = 'structure';
+      } else if (!allRolesSoFar.includes('scale')) {
+        nextRole = 'scale';
+      } else if (!allRolesSoFar.includes('style')) {
+        nextRole = 'style';
+      } else {
+        nextRole = 'style';
+      }
+      assignedRoles.push(nextRole);
+    }
+
+    try {
+      const readPromises = filesToProcess.map(async (file, idx) => {
+        const { dataUrl, sizeBytes } = await compressAndScaleImage(file);
+        const refImg: ReferenceImage = {
+          id: `ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}-${idx}`,
+          name: file.name,
+          role: assignedRoles[idx],
+          dataUrl,
+          sizeBytes
+        };
+        return refImg;
+      });
+
+      const newRefImages = await Promise.all(readPromises);
+      if (onAddReferenceImages) {
+        onAddReferenceImages(newRefImages);
+      } else if (onAddReferenceImage) {
+        newRefImages.forEach(img => onAddReferenceImage(img));
+      }
+    } catch {
+      alert('读取图片失败，请检查文件格式。');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const updateRule = (key: keyof ImageToImageRules, val: string) => {

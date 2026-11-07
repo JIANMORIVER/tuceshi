@@ -183,9 +183,15 @@ export class Workbench {
  }
 
  addReferenceImage(image:ReferenceImage){
+  this.addReferenceImages([image]);
+ }
+
+ addReferenceImages(images:ReferenceImage[]){
   const current=this.state.lab?.referenceImages||[];
-  if(current.length>=3)throw Error('参考图最多支持添加 3 张。');
-  this.setLab({referenceImages:[...current,image]});
+  const available=Math.max(0, 3 - current.length);
+  if(available<=0)throw Error('参考图最多支持添加 3 张。');
+  const toAdd=images.slice(0, available);
+  this.setLab({referenceImages:[...current, ...toAdd]});
  }
 
  removeReferenceImage(id:string){

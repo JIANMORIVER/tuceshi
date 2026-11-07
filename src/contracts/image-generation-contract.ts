@@ -115,13 +115,29 @@ export interface GenerationAuditReport {
     estimated_request_payload_bytes: number;
   };
   http_meta: {
-    status_code?: number;
+    status_code?: number | null;
+    provider_status_code?: number | null;
+    local_status_code?: number;
     content_type?: string;
+  };
+  network_meta?: {
+    selected_route?: string;
+    underlying_error_code?: string;
+    error_category?: string;
+    stage?: string;
+    elapsed_ms?: number;
+    proxy_used?: boolean;
+    proxy_endpoint?: string;
+    target_host?: string;
+  };
+  runtime_version?: {
+    version: string;
+    git_commit: string;
   };
   backend_error_code?: string;
   provider_raw_error_code?: string;
   request_id?: string;
-  stage: 'client_preparation' | 'server_body_parsing' | 'qwen_submitting' | 'qwen_generating' | 'image_downloading' | 'completed' | 'failed';
+  stage: 'client_preparation' | 'server_body_parsing' | 'preflight_check' | 'qwen_submitting' | 'qwen_generating' | 'image_downloading' | 'completed' | 'failed';
 }
 
 export interface GenerationJob {

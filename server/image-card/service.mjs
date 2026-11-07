@@ -1,9 +1,34 @@
 import { mkdir, readFile, readdir, rename, writeFile, unlink } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { join, relative } from "node:path";
 import { ImageCardError, PROJECT_ROOT, publicImageConfig } from "./config.mjs";
 import { buildPrompt } from "./prompt.mjs";
 import { DashScopeAdapter } from "./dashscope.mjs";
 import { mockPng, validatePng } from "./png.mjs";
+
+let cachedGitCommit = null;
+function getGitCommit() {
+  if (cachedGitCommit) return cachedGitCommit;
+  try {
+    cachedGitCommit = execSync("git rev-parse --short HEAD", { cwd: PROJECT_ROOT, encoding: "utf8", timeout: 1000 }).trim();
+  } catch {
+    cachedGitCommit = "unknown";
+  }
+  return cachedGitCommit;
+}
+
+let cachedVersion = null;
+function getPackageVersion() {
+  if (cachedVersion) return cachedVersion;
+  try {
+    const pkg = JSON.parse(readFileSync(join(PROJECT_ROOT, "package.json"), "utf8"));
+    cachedVersion = pkg.version || "0.7.3";
+  } catch {
+    cachedVersion = "0.7.3";
+  }
+  return cachedVersion;
+}
 
 export const validId = value => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 export function buildAuditReport({ record, input, generated, error }) {
@@ -31,7 +56,10 @@ export function buildAuditReport({ record, input, generated, error }) {
     };
   });
   const estTotalPayload = totalRefPayloadBytes + positive.length * 2 + 1024;
-  const httpStatus = generated?.httpStatus || (error ? (error.details?.httpStatus || error.status || 500) : 200);
+  
+  // 严格区分供应商真实收到的 HTTP 状态与本地 Node 错误码，严禁将本地 502 记为供应商响应
+  const providerHttpStatus = generated?.httpStatus || error?.details?.httpStatus || (generated ? 200 : null);
+  const localStatusCode = error ? (error.status || 502) : 200;
   const contentType = generated?.contentType || error?.details?.contentType || "application/json; charset=utf-8";
 
   const estTokens = record?.prompt?.estimatedTokens || Math.round(positive.length * 1.3);
@@ -50,10 +78,13 @@ export function buildAuditReport({ record, input, generated, error }) {
       estimated_request_payload_bytes: estTotalPayload
     },
     http_meta: {
-      status_code: httpStatus,
+      status_code: providerHttpStatus,
+      ...(providerHttpStatus !== null ? { provider_status_code: providerHttpStatus } : {}),
+      local_status_code: localStatusCode,
       content_type: contentType
     },
     network_meta: {
+      selected_route: error?.details?.selectedRoute || generated?.networkMeta?.selectedRoute || (error?.details?.proxyUsed || generated?.networkMeta?.proxyUsed ? "proxy" : "direct"),
       ...(error?.details?.underlyingErrorCode ? { underlying_error_code: error.details.underlyingErrorCode } : {}),
       ...(error?.details?.errorCategory ? { error_category: error.details.errorCategory } : {}),
       stage: error?.details?.stage || (generated ? "completed" : "unknown"),
@@ -61,6 +92,10 @@ export function buildAuditReport({ record, input, generated, error }) {
       proxy_used: Boolean(error?.details?.proxyUsed ?? generated?.networkMeta?.proxyUsed),
       ...(error?.details?.proxyEndpoint || generated?.networkMeta?.proxyEndpoint ? { proxy_endpoint: error?.details?.proxyEndpoint || generated?.networkMeta?.proxyEndpoint } : {}),
       ...(error?.details?.targetHost || generated?.networkMeta?.targetHost ? { target_host: error?.details?.targetHost || generated?.networkMeta?.targetHost } : {})
+    },
+    runtime_version: {
+      version: getPackageVersion(),
+      git_commit: getGitCommit()
     },
     ...(error ? { backend_error_code: error.code || "MODEL_REQUEST_FAILED" } : {}),
     ...(error?.details?.providerCode ? { provider_raw_error_code: error.details.providerCode } : {}),
