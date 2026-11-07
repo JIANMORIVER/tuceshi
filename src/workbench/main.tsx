@@ -122,10 +122,23 @@ function App(){
 
     <p className="label">{e.provider==='mock'?'离线模拟图片':e.pipeline.route==='native-alpha'?'直接透明链路':e.pipeline.route==='opaque'?'不透明直出 (画风测试 · 未调用 851LAB)':'千问普通生成 + 851 Labs'}</p>
 
-    {candidate.job?.image_url?<div className="checker"><img key={`${candidate.job.image_url}:${images[candidate.id]?.reload||0}`} src={candidate.job.image_url} alt={candidate.plan.title} onLoad={()=>setImages(old=>({...old,[candidate.id]:{url:candidate.job!.image_url!,loaded:true,failed:false,reload:old[candidate.id]?.reload||0}}))} onError={()=>setImages(old=>({...old,[candidate.id]:{url:candidate.job!.image_url!,loaded:false,failed:true,reload:old[candidate.id]?.reload||0}}))}/></div>:<div className="image-wait" role="status">{candidate.status==='not_started'?'尚未提交':candidate.status==='submitting'?'正在生成并检查透明背景…':candidate.error?'提交或处理需要核查':'结果尚未准备好'}</div>}
+    {candidate.job?.image_url?(
+      <div className="checker"><img key={`${candidate.job.image_url}:${images[candidate.id]?.reload||0}`} src={candidate.job.image_url} alt={candidate.plan.title} onLoad={()=>setImages(old=>({...old,[candidate.id]:{url:candidate.job!.image_url!,loaded:true,failed:false,reload:old[candidate.id]?.reload||0}}))} onError={()=>setImages(old=>({...old,[candidate.id]:{url:candidate.job!.image_url!,loaded:false,failed:true,reload:old[candidate.id]?.reload||0}}))}/></div>
+    ):candidate.job?.original_image_url&&candidate.job?.background_removal?.status==='processing'?(
+      <div className="image-processing-container" style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
+        <img src={candidate.job.original_image_url} alt="千问原图已生成" style={{filter:'brightness(0.9)',width:'100%',display:'block'}}/>
+        <div style={{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,0.75)',color:'#fff',padding:'0.5rem 0.75rem',fontSize:'0.85rem'}}>
+          ⏳ 851 Labs 抠图处理中（系统每2.5s自动轮询原任务）
+          <br/>
+          <span style={{fontSize:'0.78rem',color:'#cce5ff'}}>
+            任务 ID: {candidate.job.background_removal.prediction_id||'已在队列'} · 已耗时 {Math.round((candidate.job.background_removal.elapsed_ms||0)/1000)}s · 原图已保留
+          </span>
+        </div>
+      </div>
+    ):(<div className="image-wait" role="status">{candidate.status==='not_started'?'尚未提交':candidate.status==='submitting'?'正在生成并检查透明背景…':candidate.error?'提交或处理需要核查':'结果尚未准备好'}</div>)}
     {(candidate.error||candidate.job?.error_message)&&<p role="alert">{candidate.error||candidate.job?.error_message}</p>}
 
-    <p className="label">{hasTerrainApproval(candidate.job)?'你已审核通过':candidate.job?.background_removal?.route==='opaque'?'不透明直出完成 · 851LAB 未调用':candidate.job?.background_removal?.status==='needs_review'?'透明度或整块地形检查未通过，待你审核':candidate.job?.background_removal?.status==='ready'?'透明度检查通过 · 地面锚点仍待校验':candidate.job?.request_status||candidate.status}</p>
+    <p className="label">{hasTerrainApproval(candidate.job)?'你已审核通过':candidate.job?.background_removal?.route==='opaque'?'不透明直出完成 · 851LAB 未调用':candidate.job?.background_removal?.status==='processing'?'851 Labs 抠图处理中 · 系统自动轮询中':candidate.job?.background_removal?.status==='needs_review'?'透明度或整块地形检查未通过，待你审核':candidate.job?.background_removal?.status==='ready'?'透明度检查通过 · 地面锚点仍待校验':candidate.job?.request_status||candidate.status}</p>
 
     <details><summary>构图与完整提示词</summary>
      <p><strong>场景构图描述：</strong>{candidate.plan.scene_description}</p>
@@ -149,6 +162,15 @@ function App(){
          {candidate.job.audit_report.request_id && <div><strong>百炼 Request ID：</strong><code>{candidate.job.audit_report.request_id}</code></div>}
          {candidate.job.audit_report.provider_raw_error_code && <div><strong>千问原始错误码：</strong><code className="error-code">{candidate.job.audit_report.provider_raw_error_code}</code></div>}
          {candidate.job.audit_report.backend_error_code && <div><strong>后端错误码：</strong><code>{candidate.job.audit_report.backend_error_code}</code></div>}
+         {candidate.job.background_removal?.prediction_id && (
+           <>
+             <div><strong>851 Prediction ID：</strong><code>{candidate.job.background_removal.prediction_id}</code></div>
+             <div><strong>851 提交时间：</strong><span>{candidate.job.background_removal.submitted_at || '已提交'}</span></div>
+             <div><strong>851 抠图状态：</strong><span>{candidate.job.background_removal.current_status || candidate.job.background_removal.status}</span></div>
+             <div><strong>851 抠图耗时：</strong><span>{Math.round((candidate.job.background_removal.elapsed_ms || 0) / 1000)} 秒</span></div>
+             {candidate.job.background_removal.error_code && <div><strong>851 错误码：</strong><code className="error-code">{candidate.job.background_removal.error_code}</code></div>}
+           </>
+         )}
         </div>
 
         <div className="audit-section-block">
@@ -185,7 +207,38 @@ function App(){
       </details>
     )}
 
-    {candidate.job?.original_image_url&&candidate.job.background_removal?.route!=='opaque'&&<details><summary>原图与透明图对比</summary><div className="comparison"><figure><figcaption>原图保留</figcaption><img src={candidate.job.original_image_url} alt="原始生成图片"/><a href={candidate.job.original_image_url} download={`${candidate.id}-original.png`}>下载原图</a></figure><figure><figcaption>透明结果</figcaption>{candidate.job.image_url&&<div className="checker"><img src={candidate.job.image_url} alt="透明结果"/></div>}{candidate.job.image_url&&<a href={candidate.job.image_url} download={`${candidate.id}-transparent.png`}>下载透明图</a>}</figure></div></details>}
+    {candidate.job?.original_image_url&&candidate.job.background_removal?.route!=='opaque'&&(
+      <details open={Boolean(candidate.job?.background_removal?.mask_url)}>
+        <summary>原图与透明图对比</summary>
+        <div className="comparison">
+          <figure>
+            <figcaption>原图保留</figcaption>
+            <img src={candidate.job.original_image_url} alt="原始生成图片"/>
+            <a href={candidate.job.original_image_url} download={`${candidate.id}-original.png`}>下载原图</a>
+          </figure>
+          <figure>
+            <figcaption>透明结果</figcaption>
+            {candidate.job.image_url ? (
+              <div className="checker"><img src={candidate.job.image_url} alt="透明结果"/></div>
+            ) : (
+              <div className="image-wait" style={{minHeight:'100px',padding:'1rem 0.5rem'}}>
+                {candidate.job.background_removal?.status==='processing'?'⏳ 851 Labs 抠图排队处理中…':'尚未准备好'}
+              </div>
+            )}
+            {candidate.job.image_url&&<a href={candidate.job.image_url} download={`${candidate.id}-transparent.png`}>下载透明图</a>}
+          </figure>
+          {candidate.job.background_removal?.mask_url&&(
+            <figure>
+              <figcaption>Alpha 灰度遮罩 (黑透白实)</figcaption>
+              <div className="mask-wrapper" style={{background:'#000',borderRadius:'4px',overflow:'hidden'}}>
+                <img src={candidate.job.background_removal.mask_url} alt="Alpha 遮罩" style={{width:'100%',display:'block'}}/>
+              </div>
+              <a href={candidate.job.background_removal.mask_url} download={`${candidate.id}-alpha-mask.png`}>下载遮罩图</a>
+            </figure>
+          )}
+        </div>
+      </details>
+    )}
     {candidate.job?.image_url&&candidate.job.background_removal?.route==='opaque'&&(
       <div className="opaque-result-info" style={{margin:'0.5rem 0',padding:'0.5rem 0.75rem',background:'#f0f9eb',border:'1px solid #c2e7b0',borderRadius:'4px',fontSize:'0.85rem'}}>
         <strong>🎨 不透明直出模式：</strong> 已直接生成普通有底图，用于评估画风与构图。<strong>未调用 851LAB 抠图</strong>，无透明背景约束。
@@ -227,7 +280,7 @@ function App(){
   <main>
    <header className="top">
     <div>
-     <p className="eyebrow">LIFE MAP · STANDALONE V0.7.5</p>
+     <p className="eyebrow">LIFE MAP · STANDALONE V0.7.6</p>
      <h1>生图控制与实验工作台</h1>
      <p>文生图 · 图生图 · 风格包迁移 · 分层干预 · 实验档案馆</p>
     </div>

@@ -7,7 +7,7 @@ export function crc32(bytes) {
   for (const byte of bytes) { crc ^= byte; for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0); }
   return (crc ^ 0xffffffff) >>> 0;
 }
-function chunk(type, data) {
+export function chunk(type, data) {
   const name = Buffer.from(type), length = Buffer.alloc(4), crc = Buffer.alloc(4);
   length.writeUInt32BE(data.length); crc.writeUInt32BE(crc32(Buffer.concat([name, data])));
   return Buffer.concat([length, name, data, crc]);

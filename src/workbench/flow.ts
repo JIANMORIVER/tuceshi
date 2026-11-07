@@ -130,6 +130,9 @@ export class Workbench {
  private listeners=new Set<()=>void>();private submitting=new Set<string>();private working=false;
  state:Experiment;busy=false;error='';
  readonly safeStorage: SafeWorkbenchStorage;
+ private pollTimers = new Map<string, any>();
+ private pollingInFlight = new Set<string>();
+ private pollStartTimes = new Map<string, number>();
 
  constructor(readonly storage:Storage,readonly api:Api=new WorkbenchApi()){
   this.safeStorage = storage instanceof SafeWorkbenchStorage ? storage : new SafeWorkbenchStorage(storage);
@@ -153,7 +156,9 @@ export class Workbench {
           this.state = hydrated;
           this.emit();
         }
+        this.resumeBackgroundPolling();
       });
+      this.resumeBackgroundPolling();
     }catch{
       this.error='上次实验记录无法读取，已保留原始缓存。请先导出缓存备份或新建实验。';
     }
@@ -548,23 +553,112 @@ export class Workbench {
    if(!result.job?.job_id)throw Error('响应缺少任务标识，请查询原任务。');
    this.patchCandidate(id,{job:result.job,status:'known'});
    void this.syncToArchive();
+   if(result.job.background_removal?.status==='processing'){
+     this.startPolling(id);
+   }
   }catch(error){this.patchCandidate(id,{status:'unknown',error:(error instanceof Error?error.message:'提交状态未知')+'；不自动重提，可查询原任务。'});}
   finally{this.submitting.delete(candidate.submissionId);}
  }
-  async retrySubmit(id: string) {
-   const candidate = this.candidate(id);
-   if (this.submitting.has(candidate.submissionId)) return;
-   await this.task(async () => {
-    this.patchCandidate(id, {
-     submissionId: crypto.randomUUID(),
-     status: 'not_started',
-     error: undefined
-    });
-    await this.submit(id);
+
+ resumeBackgroundPolling() {
+  for (const c of this.state.candidates) {
+    if (c.job?.background_removal?.status === 'processing') {
+      this.startPolling(c.id);
+    }
+  }
+ }
+
+ startPolling(id: string) {
+  if (this.pollTimers.has(id)) return;
+  this.pollStartTimes.set(id, Date.now());
+  const interval = setInterval(async () => {
+    if (this.pollingInFlight.has(id)) return;
+    const c = this.state.candidates.find(item => item.id === id);
+    if (!c || !c.job) {
+      this.stopPolling(id);
+      return;
+    }
+    const bg = c.job.background_removal;
+    if (bg?.status === 'ready' || bg?.status === 'needs_review' || bg?.status === 'failed') {
+      this.stopPolling(id);
+      return;
+    }
+    const startTime = this.pollStartTimes.get(id) || Date.now();
+    if (Date.now() - startTime > 180000) {
+      this.stopPolling(id);
+      this.patchCandidate(id, {
+        error: '自动轮询已达上限（3分钟），任务可能仍在 851 Labs 队列中；原任务已保留，请稍后手动点击「查询原任务」。'
+      });
+      return;
+    }
+    this.pollingInFlight.add(id);
+    try {
+      await this.queryQuietly(id);
+    } catch (err) {
+      console.warn(`[Auto Polling] 轮询候选 ${id} 异常:`, err);
+    } finally {
+      this.pollingInFlight.delete(id);
+      const latest = this.state.candidates.find(item => item.id === id);
+      const latestStatus = latest?.job?.background_removal?.status;
+      if (latestStatus === 'ready' || latestStatus === 'needs_review' || latestStatus === 'failed') {
+        this.stopPolling(id);
+      }
+    }
+  }, 2500);
+  this.pollTimers.set(id, interval);
+ }
+
+ stopPolling(id: string) {
+  const timer = this.pollTimers.get(id);
+  if (timer) {
+    clearInterval(timer);
+    this.pollTimers.delete(id);
+  }
+  this.pollStartTimes.delete(id);
+  this.pollingInFlight.delete(id);
+ }
+
+ stopAllPolling() {
+  for (const id of Array.from(this.pollTimers.keys())) {
+    this.stopPolling(id);
+  }
+ }
+
+ async queryQuietly(id: string): Promise<GenerationJob | undefined> {
+  const c = this.candidate(id);
+  if (c.status === 'not_started') return undefined;
+  const result = await this.api.call<GenerationJob>('/api/terrain/query', {
+    provider_task_id: c.submissionId,
+    job_id: c.job?.job_id || `terrain:${c.submissionId}`,
+    planning_run_id: this.state.id,
+    candidate_id: c.id
+  });
+  const reviewed = { ...result, manual_review: c.job?.manual_review };
+  const job = hasTerrainApproval(reviewed) ? reviewed : result;
+  this.patchCandidate(id, { job, status: 'known', error: undefined });
+  if (this.state.selectedId === id && !terrainUsable(job)) {
+    this.edit({ stage: 'results', selectedId: undefined });
+  }
+  void this.syncToArchive();
+  return job;
+ }
+
+ async retrySubmit(id: string) {
+  this.stopPolling(id);
+  const candidate = this.candidate(id);
+  if (this.submitting.has(candidate.submissionId)) return;
+  await this.task(async () => {
+   this.patchCandidate(id, {
+    submissionId: crypto.randomUUID(),
+    status: 'not_started',
+    error: undefined
    });
+   await this.submit(id);
+  });
  }
  async regenerateWithLab(candidateId?: 'candidate_1'|'candidate_2'){
   const targetId = candidateId || this.state.lab?.frozenCandidateId || 'candidate_1';
+  this.stopPolling(targetId);
   await this.task(async()=>{
    const newSubmissionId = crypto.randomUUID();
    this.patchCandidate(targetId, {
@@ -576,11 +670,16 @@ export class Workbench {
    await this.submit(targetId);
   });
  }
- async query(id:string){await this.task(async()=>{const c=this.candidate(id);if(c.status==='not_started')throw Error('尚未提交，请明确开始此方案。');const result=await this.api.call<GenerationJob>('/api/terrain/query',{provider_task_id:c.submissionId,job_id:c.job?.job_id||`terrain:${c.submissionId}`,planning_run_id:this.state.id,candidate_id:c.id});
-  const reviewed={...result,manual_review:c.job?.manual_review},job=hasTerrainApproval(reviewed)?reviewed:result;
-  this.patchCandidate(id,{job,status:'known',error:undefined});
-  if(this.state.selectedId===id&&!terrainUsable(job))this.edit({stage:'results',selectedId:undefined});
- });}
+ async query(id:string){
+  await this.task(async()=>{
+   const job = await this.queryQuietly(id);
+   if(job?.background_removal?.status === 'processing'){
+    this.startPolling(id);
+   } else {
+    this.stopPolling(id);
+   }
+  });
+ }
  approve(id:string){
   this.patchCandidate(id,{job:approveTerrain(this.candidate(id).job!)});
   void this.syncToArchive();

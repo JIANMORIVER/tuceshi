@@ -1,5 +1,35 @@
-import {inflateSync} from 'node:zlib';
-import {validatePng} from '../image-card/png.mjs';
+import {deflateSync, inflateSync} from 'node:zlib';
+import {validatePng, chunk} from '../image-card/png.mjs';
+
+const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+/**
+ * 将 8-bit Alpha 通道提取并编码为标准的灰度图 PNG (Color Type 0)
+ * 背景完全透明(alpha=0)对应纯黑 (0)，完全不透明(alpha=255)对应纯白 (255)
+ */
+export function encodeGrayscalePng(width, height, alpha) {
+  const rawStride = width + 1;
+  const rawBytes = Buffer.alloc(rawStride * height);
+  for (let y = 0; y < height; y++) {
+    const rowOffset = y * rawStride;
+    rawBytes[rowOffset] = 0; // Filter: None
+    rawBytes.set(alpha.subarray(y * width, (y + 1) * width), rowOffset + 1);
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // 8-bit depth
+  header[9] = 0; // Color type: 0 (Grayscale)
+  header[10] = 0;
+  header[11] = 0;
+  header[12] = 0;
+  return Buffer.concat([
+    signature,
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(rawBytes)),
+    chunk('IEND', Buffer.alloc(0))
+  ]);
+}
 
 /** Decode the validated non-interlaced 8-bit PNG; inspection never changes original bytes. */
 export function decodePng(bytes) {

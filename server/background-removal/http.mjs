@@ -10,6 +10,10 @@ export function withTerrainBackground(listener,{pipeline,settings}={}){
       try{const bytes=await pipeline.image(path.slice('/api/terrain-cutouts/'.length));res.writeHead(200,{'content-type':'image/png','cache-control':'no-store','cross-origin-resource-policy':'same-origin','x-content-type-options':'nosniff'});res.end(bytes);}
       catch{res.writeHead(404,{'content-type':'application/json'});res.end(JSON.stringify({error:'透明图片尚未准备好，原图仍保留。'}));}return;
     }
+    if(req.method==='GET'&&path.startsWith('/api/terrain-masks/')){
+      try{const bytes=await pipeline.mask(path.slice('/api/terrain-masks/'.length));res.writeHead(200,{'content-type':'image/png','cache-control':'no-store','cross-origin-resource-policy':'same-origin','x-content-type-options':'nosniff'});res.end(bytes);}
+      catch{res.writeHead(404,{'content-type':'application/json'});res.end(JSON.stringify({error:'Alpha 灰度遮罩尚未准备好，原图仍保留。'}));}return;
+    }
     if(req.method!=='POST'||!['/api/terrain/generate','/api/terrain/query'].includes(path))return listener(req,res);
     const headers={};let status=200,body;
     const capture={statusCode:200,setHeader(name,value){headers[name]=value;},getHeader(name){return headers[name];},writeHead(code,values){status=code;Object.assign(headers,values);return this;},end(value){body=value;return this;}};
