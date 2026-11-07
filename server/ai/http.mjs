@@ -5,10 +5,21 @@ import { DiaryDialogue } from "./diary-dialogue.mjs";
 import { ImageCardError } from "../image-card/config.mjs";
 import { DIARY_IMAGE_UNDERSTANDING_PROMPT } from "./diary-prompt.mjs";
 import { SceneExploration, SceneRequestError } from "./scene-exploration.mjs";
+import { createSmartFetcher } from "../image-card/dashscope.mjs";
+
 const json = (res,data,status=200) => { res.writeHead(status,{"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"});res.end(JSON.stringify(data)); };
-export function createAiHandler({cookieName="life_map_ai",settings=new ModelSettings(),terrain=new CompleteTerrainGeneration(settings),interpreter,dialogue=new DiaryDialogue(settings)}={}) {
+
+export function createAiHandler({
+  cookieName="life_map_ai",
+  settings=new ModelSettings(),
+  terrain=new CompleteTerrainGeneration(settings),
+  interpreter,
+  dialogue,
+  fetcher=createSmartFetcher()
+}={}) {
   if(!/^[a-zA-Z0-9_]+$/.test(cookieName))throw new Error("Invalid session cookie name");
-  const scene = new SceneExploration(settings);
+  const scene = new SceneExploration(settings, { fetcher });
+  const dial = dialogue || new DiaryDialogue(settings, { fetcher });
   const session=randomBytes(32).toString("hex");
   return async(req,res) => {
     const path=new URL(req.url,"http://localhost").pathname;
@@ -42,8 +53,8 @@ export function createAiHandler({cookieName="life_map_ai",settings=new ModelSett
       if(path==="/api/model-settings")json(res,settings.update(data));
       else if(path==="/api/scene/recognize")json(res,await scene.recognize(data));
       else if(path==="/api/scene/chat")json(res,await scene.chat(data));
-      else if(path==="/api/diary/inquire")json(res,await dialogue.complete("inquiry",data));
-      else if(path==="/api/diary/scene-plan")json(res,await dialogue.complete("scene",data));
+      else if(path==="/api/diary/inquire")json(res,await dial.complete("inquiry",data));
+      else if(path==="/api/diary/scene-plan")json(res,await dial.complete("scene",data));
       else if(path==="/api/terrain/generate")json(res,await terrain.generate(data));
       else if(path==="/api/terrain/query")json(res,await terrain.query(data));
       else{
@@ -51,12 +62,33 @@ export function createAiHandler({cookieName="life_map_ai",settings=new ModelSett
         config.systemPrompt=DIARY_IMAGE_UNDERSTANDING_PROMPT;
         if(config.provider!=="mock"&&!config.apiKey)throw new ImageCardError("API_KEY_MISSING","所选文字模型尚未配置密钥，请在首页模型设置中填写，或主动选择离线模式。",503);
         const interpret=interpreter||(await import("../../dist/domain/services/life-interpretation-service.js")).interpretLifeEntry;
-        const result=await interpret(data.input,config);
+        const result=await interpret(data.input,config,fetcher);
         json(res,result);
       }
     }catch(error){
-      const safe=error instanceof ImageCardError||error instanceof SceneRequestError?error:new ImageCardError("MODEL_REQUEST_FAILED",error?.name==="AbortError"?"模型请求超时，未自动重试。":"模型响应或结构校验未通过，请检查配置后手动重试。",502);
-      json(res,{error:safe.message,code:safe.code},safe.status);
+      let safe;
+      if (error instanceof ImageCardError || error instanceof SceneRequestError) {
+        safe = error;
+      } else {
+        const rawCode = String(error?.code || error?.cause?.code || error?.name || "");
+        const rawMsg = String(error?.message || error?.cause?.message || "");
+        const combined = `${rawCode} ${rawMsg}`.toLowerCase();
+
+        if (error?.name === "AbortError" || /etimedout|esockettimedout|timeout/i.test(combined)) {
+          safe = new ImageCardError("MODEL_TIMEOUT", "模型请求超时，未自动重试，请检查网络或稍后手动重试。", 504);
+        } else if (/enotfound|eai_again|eai_fail|getaddrinfo/i.test(combined)) {
+          safe = new ImageCardError("NETWORK_DNS_ERROR", `无法解析模型服务域名 (DNS 失败: ${rawCode || 'ENOTFOUND'})，请检查本地网络与 DNS。`, 502);
+        } else if (/econnreset|econnrefused|econnaborted|und_err_socket|disconnected before secure tls/i.test(combined)) {
+          safe = new ImageCardError("NETWORK_CONNECTION_RESET", `无法连接至模型服务器 [${rawCode || 'ECONNRESET'}: 连接被重置]，可能是本地代理/TUN网卡拦截或直连被阻断。请检查本地网络或开启代理。`, 502);
+        } else if (/fetch failed/i.test(combined)) {
+          safe = new ImageCardError("NETWORK_FETCH_FAILED", `外部模型网络请求失败 (${rawCode || 'FETCH_FAILED'}): ${rawMsg}`, 502);
+        } else if (rawMsg && !/\[object Object\]/.test(rawMsg)) {
+          safe = new ImageCardError("MODEL_REQUEST_FAILED", rawMsg, 502);
+        } else {
+          safe = new ImageCardError("MODEL_REQUEST_FAILED", "模型响应或结构校验未通过，请检查配置后手动重试。", 502);
+        }
+      }
+      json(res,{error:safe.message,code:safe.code},safe.status || 502);
     }
     return true;
   };

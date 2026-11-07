@@ -216,7 +216,7 @@ function App(){
   <main>
    <header className="top">
     <div>
-     <p className="eyebrow">LIFE MAP · STANDALONE V0.7.0</p>
+     <p className="eyebrow">LIFE MAP · STANDALONE V0.7.3</p>
      <h1>生图控制与实验工作台</h1>
      <p>文生图 · 图生图 · 风格包迁移 · 分层干预 · 实验档案馆</p>
     </div>

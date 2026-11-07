@@ -165,6 +165,54 @@ export async function probeLocalProxy() {
   return null;
 }
 
+let detectedProxyCache = null;
+
+/**
+ * 创建具备 TUN/代理自愈能力的智能 Fetcher
+ * - 优先遵从 customProxy 或环境变量 (LIFE_MAP_IMAGE_PROXY / HTTPS_PROXY / HTTP_PROXY)
+ * - 存在缓存代理时优先复用
+ * - 直连遇到 ECONNRESET / TLS 断连时，自动探测本地代理端口 (7897, 7890 等) 并切换自愈重发
+ */
+export function createSmartFetcher(customProxy = "") {
+  return async function smartFetch(urlStr, options = {}) {
+    let effectiveProxy = customProxy || detectedProxyCache || process.env.LIFE_MAP_IMAGE_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.https_proxy || process.env.http_proxy || "";
+
+    if (effectiveProxy) {
+      try {
+        const tunneled = createTunneledFetch(effectiveProxy);
+        return await tunneled(urlStr, options);
+      } catch (proxyErr) {
+        if (effectiveProxy === detectedProxyCache) {
+          detectedProxyCache = null;
+        }
+        if (customProxy || process.env.LIFE_MAP_IMAGE_PROXY) {
+          throw proxyErr;
+        }
+      }
+    }
+
+    try {
+      return await globalThis.fetch(urlStr, options);
+    } catch (err) {
+      if (options.signal?.aborted) {
+        throw err;
+      }
+      const combined = `${err?.code || ''} ${err?.message || ''} ${err?.cause?.code || ''} ${err?.cause?.message || ''}`;
+      const isConnReset = /ECONNRESET|ECONNABORTED|UND_ERR_SOCKET|disconnected before secure TLS/i.test(combined);
+      if (isConnReset) {
+        const fallbackProxy = await probeLocalProxy();
+        if (fallbackProxy) {
+          console.warn(`[smartFetch] 检测到直连断开/被重置 (TUN 模式)，自愈切换至本地代理: ${fallbackProxy}`);
+          detectedProxyCache = fallbackProxy;
+          const tunneled = createTunneledFetch(fallbackProxy);
+          return await tunneled(urlStr, options);
+        }
+      }
+      throw err;
+    }
+  };
+}
+
 /**
  * 精准分析底层网络异常，分类归因
  */
